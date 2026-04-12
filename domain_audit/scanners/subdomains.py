@@ -355,6 +355,7 @@ def scan(domain: str, deep: bool = False) -> ScanResult:
             "grade": "-",
             "detail": detail_msg,
             "fix": "",
+            "subdomain_list": all_subs,
         })
 
         # Only add detail tables if deep mode was used

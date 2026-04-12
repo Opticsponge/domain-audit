@@ -118,7 +118,7 @@ def _display_terminal(result: AuditResult) -> None:
             continue
         # Skip subdomains as standalone — its tables are merged into other modules
         if mod == "subdomains":
-            # Show discovery summary only (non-table findings)
+            # Show discovery summary + the actual subdomain list
             r = result.results[mod]
             non_table = [f for f in r.findings if not f.get("table_type")]
             if non_table:
@@ -126,7 +126,14 @@ def _display_terminal(result: AuditResult) -> None:
                 label = MODULE_LABELS.get(mod, mod)
                 console.print(f"  [bold {color}]{r.grade}[/bold {color}]  [bold]{domain}[/bold] [dim]>[/dim] [bold]{label}[/bold]")
                 console.print(f"  [dim]{'─' * 60}[/dim]")
-                _display_terminal_simple_findings(console, non_table)
+                for f in non_table:
+                    console.print(f"     [dim]{f.get('detail', '')}[/dim]")
+                    sub_list = f.get("subdomain_list", [])
+                    if sub_list:
+                        # Show in columns
+                        from rich.columns import Columns
+                        styled = [f"[cyan]{s}[/cyan]" for s in sub_list]
+                        console.print(Columns(styled, padding=(0, 2), column_first=True))
                 console.print()
             continue
 
@@ -602,13 +609,20 @@ def _display_colab(result: AuditResult) -> None:
                 {_colab_data_table(table_key, sf.get("table_data", []))}
             </div>"""
 
-        # For subdomains module, only show non-table findings (discovery summary)
+        # For subdomains module, show discovery summary + clickable subdomain list
         if mod == "subdomains":
             non_table_html = ""
             for f in r.findings:
                 if not f.get("table_type"):
                     d = _esc(f.get("detail", ""))
                     non_table_html += f'<div style="padding:6px 14px;color:#8b949e;font-size:13px;">{d}</div>'
+                    sub_list = f.get("subdomain_list", [])
+                    if sub_list:
+                        subs_html = "".join(
+                            f'<span style="display:inline-block;padding:3px 8px;margin:2px;background:#161b22;border:1px solid #21262d;border-radius:4px;font-family:monospace;font-size:12px;color:#58a6ff;">{_esc(s)}</span>'
+                            for s in sub_list
+                        )
+                        non_table_html += f'<div style="padding:8px 14px;display:flex;flex-wrap:wrap;gap:0;">{subs_html}</div>'
             findings_html = non_table_html
 
         detail_panels += f"""
