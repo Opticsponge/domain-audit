@@ -88,9 +88,9 @@ domain-audit example.com --tech-patterns my_patterns.json
 domain-audit ships as an MCP (Model Context Protocol) server, allowing AI agents
 to invoke domain scans as tools.
 
-### Claude Desktop
+### Setup
 
-Add to your `claude_desktop_config.json`:
+**Claude Desktop** — add to `claude_desktop_config.json`:
 
 ```json
 {
@@ -101,6 +101,20 @@ Add to your `claude_desktop_config.json`:
   }
 }
 ```
+
+**Claude Code** — add to `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "domain-audit": {
+      "command": "domain-audit-mcp"
+    }
+  }
+}
+```
+
+Works with any MCP-compatible client (Cursor, Cline, etc.) using the same config pattern.
 
 ### Available Tools
 
@@ -116,6 +130,25 @@ Add to your `claude_desktop_config.json`:
 | `scan_email` | SPF/DKIM/DMARC validation |
 | `scan_tech` | Technology fingerprinting |
 | `list_scanners` | List available scanners |
+
+### Example Tool Response
+
+Each tool returns structured JSON. For example, `scan_ssl("example.com")` returns:
+
+```json
+{
+  "module": "ssl",
+  "status": "pass",
+  "grade": "A",
+  "findings": [
+    {"label": "Certificate", "grade": "A", "detail": "Valid, expires in 364 days", "fix": ""}
+  ],
+  "raw_data": { "issuer": "Let's Encrypt", "not_after": "2027-04-11", ... },
+  "elapsed": 1.2
+}
+```
+
+`audit_domain` returns all module results plus `overall_grade` and `action_items`.
 
 ### Python API
 
@@ -318,99 +351,7 @@ domain_audit/
 
 ## Contributing
 
-Contributions welcome! Each scanner is an independent module — easy to add new ones or improve existing checks.
-
-### Getting Started
-
-```bash
-# 1. Fork on GitHub, then clone your fork
-git clone https://github.com/YOUR_USERNAME/domain-audit.git
-cd domain-audit
-
-# 2. Set up development environment
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-
-# 3. Run tests
-pytest tests/ -v
-
-# 4. Create a feature branch
-git checkout -b feature/new-scanner
-```
-
-### Using Your Fork in Google Colab
-
-If you want to run your own modified version in Colab instead of the published package:
-
-```python
-# Install from YOUR fork (replace YOUR_USERNAME)
-!pip install git+https://github.com/YOUR_USERNAME/domain-audit.git -q
-
-# Or install a specific branch
-!pip install git+https://github.com/YOUR_USERNAME/domain-audit.git@feature/my-branch -q
-
-# Or clone and install in editable mode (for live editing in Colab)
-!git clone https://github.com/YOUR_USERNAME/domain-audit.git /content/domain-audit
-!pip install -e /content/domain-audit -q
-```
-
-### Keeping Your Fork in Sync
-
-```bash
-# Add upstream remote (one-time)
-git remote add upstream https://github.com/Opticsponge/domain-audit.git
-
-# Fetch and merge upstream changes
-git fetch upstream
-git merge upstream/main
-
-# Push updated main to your fork
-git push origin main
-```
-
-### Submitting Changes
-
-1. Push your feature branch to your fork
-2. Open a PR against `Opticsponge/domain-audit:main`
-3. Include tests for new scanners or changed behavior
-
-### Releasing a New Version (maintainers only)
-
-Releases are automated via GitHub Actions using [Trusted Publishers](https://docs.pypi.org/trusted-publishers/) (no API tokens needed).
-
-**One-time setup:**
-
-1. Create accounts on [PyPI](https://pypi.org) and [TestPyPI](https://test.pypi.org)
-2. On each, go to "Publishing" and add a Trusted Publisher:
-   - Owner: `Opticsponge`
-   - Repository: `domain-audit`
-   - Workflow: `publish.yml`
-   - Environment: `pypi` (or `testpypi` for TestPyPI)
-3. In your GitHub repo, create two environments under Settings > Environments:
-   - `testpypi`
-   - `pypi` (optionally add required reviewers for extra safety)
-
-**To release:**
-
-1. Bump version in `pyproject.toml`
-2. Update `CHANGELOG.md`
-3. Commit, push, and create a GitHub Release with tag `v0.X.0`
-4. The publish workflow automatically: builds, uploads to TestPyPI, then uploads to PyPI
-
-**First-time manual upload (if not using Trusted Publishers yet):**
-
-```bash
-pip install build twine
-python -m build
-
-# Test on TestPyPI first
-python -m twine upload --repository testpypi dist/*
-
-# Verify: pip install -i https://test.pypi.org/simple/ domain-audit
-
-# Then upload to real PyPI
-python -m twine upload dist/*
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code quality tools, fork workflow, and submission guidelines.
 
 ## License
 

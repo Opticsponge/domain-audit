@@ -15,3 +15,6 @@ env/
 *.so
 .DS_Store
 docs/superpowers/
+.ruff_cache/
+.coverage
+htmlcov/
