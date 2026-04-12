@@ -1,5 +1,6 @@
-from unittest.mock import patch, MagicMock
-from domain_audit.core import audit, AuditResult
+from unittest.mock import MagicMock, patch
+
+from domain_audit.core import AuditResult, audit
 from domain_audit.grader import ScanResult
 
 
@@ -13,10 +14,13 @@ def _mock_scan(module, grade="A"):
 
 
 class TestAudit:
-    @patch("domain_audit.core.SCANNERS", {
-        "ssl": lambda d: _mock_scan("ssl", "A"),
-        "dns": lambda d: _mock_scan("dns", "A"),
-    })
+    @patch(
+        "domain_audit.core.SCANNERS",
+        {
+            "ssl": lambda d: _mock_scan("ssl", "A"),
+            "dns": lambda d: _mock_scan("dns", "A"),
+        },
+    )
     def test_basic_audit(self):
         result = audit("example.com", show=False)
         assert isinstance(result, AuditResult)
@@ -25,28 +29,37 @@ class TestAudit:
         assert "ssl" in result.results
         assert "dns" in result.results
 
-    @patch("domain_audit.core.SCANNERS", {
-        "ssl": lambda d: _mock_scan("ssl", "A"),
-        "dns": lambda d: _mock_scan("dns", "A"),
-        "headers": lambda d: _mock_scan("headers", "F"),
-    })
+    @patch(
+        "domain_audit.core.SCANNERS",
+        {
+            "ssl": lambda d: _mock_scan("ssl", "A"),
+            "dns": lambda d: _mock_scan("dns", "A"),
+            "headers": lambda d: _mock_scan("headers", "F"),
+        },
+    )
     def test_only_filter(self):
         result = audit("example.com", only=["ssl"], show=False)
         assert "ssl" in result.results
         assert "dns" not in result.results
         assert "headers" not in result.results
 
-    @patch("domain_audit.core.SCANNERS", {
-        "ssl": MagicMock(side_effect=RuntimeError("boom")),
-    })
+    @patch(
+        "domain_audit.core.SCANNERS",
+        {
+            "ssl": MagicMock(side_effect=RuntimeError("boom")),
+        },
+    )
     def test_scanner_crash_handled(self):
         result = audit("example.com", only=["ssl"], show=False)
         assert result.results["ssl"].status == "error"
         assert result.results["ssl"].grade == "?"
 
-    @patch("domain_audit.core.SCANNERS", {
-        "ssl": lambda d: _mock_scan("ssl", "A"),
-    })
+    @patch(
+        "domain_audit.core.SCANNERS",
+        {
+            "ssl": lambda d: _mock_scan("ssl", "A"),
+        },
+    )
     def test_show_false_no_display(self):
         # Should not raise even without terminal/colab
         result = audit("example.com", show=False)
@@ -90,6 +103,7 @@ class TestAuditResult:
         path = str(tmp_path / "out.json")
         result.to_json(path)
         import json
+
         with open(path) as f:
             data = json.load(f)
         assert data["domain"] == "example.com"

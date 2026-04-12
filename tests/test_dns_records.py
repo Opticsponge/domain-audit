@@ -1,4 +1,5 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 from domain_audit.scanners.dns_records import scan
 
 

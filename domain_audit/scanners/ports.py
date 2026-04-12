@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import errno
 import socket
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from domain_audit.grader import ScanResult
-from domain_audit.validators import validate_resolved_ip, PrivateIPError, safe_error
+from domain_audit.validators import PrivateIPError, validate_resolved_ip
 
 COMMON_PORTS = {
     21: "FTP",
@@ -33,8 +34,6 @@ DANGEROUS_PORTS = {1433, 3306, 3389, 5432, 9200, 9300, 27017, 27018, 27019}
 
 PORT_TIMEOUT = 3.0
 
-
-import errno
 
 # Port states
 PORT_OPEN = "open"
@@ -74,10 +73,7 @@ def _scan_host(host: str) -> dict[str, Any] | None:
     closed_count = 0
 
     with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {
-            executor.submit(_check_port, host, port): port
-            for port in COMMON_PORTS
-        }
+        futures = {executor.submit(_check_port, host, port): port for port in COMMON_PORTS}
         for future in as_completed(futures):
             port, state = future.result()
             if state == PORT_OPEN:
@@ -145,13 +141,15 @@ def scan(domain: str, subdomains: list[str] | None = None) -> ScanResult:
             module="ports",
             status="error",
             grade="?",
-            findings=[{
-                "label": "Port scan",
-                "value": "No resolvable hosts",
-                "grade": "?",
-                "detail": "Could not resolve any hosts to a public IP",
-                "fix": "Verify domain has a valid A record",
-            }],
+            findings=[
+                {
+                    "label": "Port scan",
+                    "value": "No resolvable hosts",
+                    "grade": "?",
+                    "detail": "Could not resolve any hosts to a public IP",
+                    "fix": "Verify domain has a valid A record",
+                }
+            ],
             raw_data={"error": "No resolvable hosts", "skipped": skipped},
             elapsed=time.time() - start,
             retries=0,
@@ -181,69 +179,84 @@ def scan(domain: str, subdomains: list[str] | None = None) -> ScanResult:
 
         if dangerous_open:
             port_names = ", ".join(f"{p} ({COMMON_PORTS[p]})" for p in sorted(dangerous_open))
-            findings.append({
-                "label": f"Dangerous ports — {host_label}",
-                "value": list(dangerous_open),
-                "grade": "F",
-                "detail": f"Database/RDP ports open: {port_names}",
-                "fix": "Close these ports or restrict access via firewall rules",
-            })
+            findings.append(
+                {
+                    "label": f"Dangerous ports — {host_label}",
+                    "value": list(dangerous_open),
+                    "grade": "F",
+                    "detail": f"Database/RDP ports open: {port_names}",
+                    "fix": "Close these ports or restrict access via firewall rules",
+                }
+            )
 
         unexpected = port_nums - EXPECTED_PORTS - ACCEPTABLE_PORTS - DANGEROUS_PORTS
         if unexpected:
             port_names = ", ".join(f"{p} ({COMMON_PORTS.get(p, 'unknown')})" for p in sorted(unexpected))
-            findings.append({
-                "label": f"Unexpected ports — {host_label}",
-                "value": list(unexpected),
-                "grade": "C",
-                "detail": f"Non-standard ports open: {port_names}",
-                "fix": "Review if these ports need to be publicly accessible",
-            })
+            findings.append(
+                {
+                    "label": f"Unexpected ports — {host_label}",
+                    "value": list(unexpected),
+                    "grade": "C",
+                    "detail": f"Non-standard ports open: {port_names}",
+                    "fix": "Review if these ports need to be publicly accessible",
+                }
+            )
 
         filtered = hr.get("filtered_count", 0)
         closed = hr.get("closed_count", 0)
 
         if hr["open_ports"]:
             port_summary = "{} open, {} closed, {} filtered".format(
-                len(hr["open_ports"]), closed, filtered,
+                len(hr["open_ports"]),
+                closed,
+                filtered,
             )
-            findings.append({
-                "label": f"Open ports — {host_label}",
-                "value": hr["open_ports"],
-                "grade": "-",
-                "detail": "{} port(s) open: {} ({})".format(
-                    len(hr["open_ports"]),
-                    ", ".join("{}/{}".format(p["port"], p["service"]) for p in hr["open_ports"]),
-                    port_summary,
-                ),
-                "fix": "",
-            })
+            findings.append(
+                {
+                    "label": f"Open ports — {host_label}",
+                    "value": hr["open_ports"],
+                    "grade": "-",
+                    "detail": "{} port(s) open: {} ({})".format(
+                        len(hr["open_ports"]),
+                        ", ".join("{}/{}".format(p["port"], p["service"]) for p in hr["open_ports"]),
+                        port_summary,
+                    ),
+                    "fix": "",
+                }
+            )
         elif filtered > closed:
-            findings.append({
-                "label": f"Open ports — {host_label}",
-                "value": [],
-                "grade": "-",
-                "detail": f"No open ports — {filtered} filtered (firewall likely blocking probes), {closed} closed",
-                "fix": "",
-            })
+            findings.append(
+                {
+                    "label": f"Open ports — {host_label}",
+                    "value": [],
+                    "grade": "-",
+                    "detail": f"No open ports — {filtered} filtered (firewall likely blocking probes), {closed} closed",
+                    "fix": "",
+                }
+            )
         else:
-            findings.append({
-                "label": f"Open ports — {host_label}",
-                "value": [],
-                "grade": "-",
-                "detail": f"No open ports — {closed} closed, {filtered} filtered",
-                "fix": "",
-            })
+            findings.append(
+                {
+                    "label": f"Open ports — {host_label}",
+                    "value": [],
+                    "grade": "-",
+                    "detail": f"No open ports — {closed} closed, {filtered} filtered",
+                    "fix": "",
+                }
+            )
 
     # Summary finding
     if len(host_results) > 1:
-        findings.insert(0, {
-            "label": "Hosts scanned",
-            "value": len(host_results),
-            "grade": "-",
-            "detail": f"Scanned {len(host_results)} host(s): {', '.join(hr['host'] for hr in host_results)}",
-            "fix": "",
-        })
+        findings.insert(
+            0,
+            {
+                "label": "Hosts scanned",
+                "value": len(host_results),
+                "grade": "-",
+                "detail": f"Scanned {len(host_results)} host(s): {', '.join(hr['host'] for hr in host_results)}",
+                "fix": "",
+            },
+        )
 
     status = "pass" if module_grade == "A" else "warn" if module_grade in ("B", "C") else "fail"
 

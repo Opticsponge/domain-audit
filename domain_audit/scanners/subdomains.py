@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import socket
 import ssl
 import time
@@ -7,13 +8,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any
 
-import dns.resolver
 import dns.exception
+import dns.resolver
 import requests
 
 from domain_audit.grader import ScanResult
 from domain_audit.rate_limit import throttle
-from domain_audit.retry import RetryConfig, with_retry
+from domain_audit.retry import RetryConfig
 from domain_audit.validators import is_private_ip, safe_error
 
 _retry_ct = RetryConfig(max_retries=3, base_delay=2.0, timeout_per_attempt=15.0)
@@ -40,7 +41,7 @@ def _query_certspotter(domain: str) -> list[dict[str, Any]]:
     """Fallback: query SSLMate's Cert Spotter API."""
     throttle("https://api.certspotter.com/")
     resp = requests.get(
-        f"https://api.certspotter.com/v1/issuances",
+        "https://api.certspotter.com/v1/issuances",
         params={"domain": domain, "include_subdomains": "true", "expand": "dns_names"},
         timeout=15.0,
         headers={"User-Agent": "domain-audit/0.1"},
@@ -60,9 +61,8 @@ def _discover_subdomains(domain: str) -> list[str]:
             name_value = entry.get("name_value", "")
             for name in name_value.split("\n"):
                 name = name.strip().lower()
-                if name and not name.startswith("*"):
-                    if name.endswith(f".{domain}") or name == domain:
-                        subdomains.add(name)
+                if name and not name.startswith("*") and (name.endswith(f".{domain}") or name == domain):
+                    subdomains.add(name)
         if subdomains:
             return sorted(subdomains)
     except Exception:
@@ -74,9 +74,8 @@ def _discover_subdomains(domain: str) -> list[str]:
         for entry in entries:
             for name in entry.get("dns_names", []):
                 name = name.strip().lower()
-                if name and not name.startswith("*"):
-                    if name.endswith(f".{domain}") or name == domain:
-                        subdomains.add(name)
+                if name and not name.startswith("*") and (name.endswith(f".{domain}") or name == domain):
+                    subdomains.add(name)
         if subdomains:
             return sorted(subdomains)
     except Exception:
@@ -84,10 +83,36 @@ def _discover_subdomains(domain: str) -> list[str]:
 
     # If both fail, try basic DNS brute-force with common prefixes
     common_prefixes = [
-        "www", "mail", "ftp", "smtp", "pop", "imap", "blog", "webmail",
-        "server", "ns1", "ns2", "dns", "dns1", "dns2", "mx", "mx1",
-        "vpn", "admin", "portal", "api", "dev", "staging", "test",
-        "app", "cdn", "cloud", "git", "ssh", "remote", "cpanel",
+        "www",
+        "mail",
+        "ftp",
+        "smtp",
+        "pop",
+        "imap",
+        "blog",
+        "webmail",
+        "server",
+        "ns1",
+        "ns2",
+        "dns",
+        "dns1",
+        "dns2",
+        "mx",
+        "mx1",
+        "vpn",
+        "admin",
+        "portal",
+        "api",
+        "dev",
+        "staging",
+        "test",
+        "app",
+        "cdn",
+        "cloud",
+        "git",
+        "ssh",
+        "remote",
+        "cpanel",
     ]
     for prefix in common_prefixes:
         sub = f"{prefix}.{domain}"
@@ -103,6 +128,7 @@ def _discover_subdomains(domain: str) -> list[str]:
 # ═══════════════════════════════════════════════════════════════════
 #  Per-subdomain probes
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _probe_subdomain(sub: str) -> dict[str, Any]:
     """Run lightweight probes against a single subdomain."""
@@ -230,6 +256,7 @@ def _probe_http(sub: str) -> dict[str, Any]:
 #  Build summary tables from probe results
 # ═══════════════════════════════════════════════════════════════════
 
+
 def _build_dns_table(probes: list[dict]) -> list[dict[str, str]]:
     """One row per subdomain with IP addresses."""
     rows = []
@@ -240,12 +267,14 @@ def _build_dns_table(probes: list[dict]) -> list[dict[str, str]]:
         ipv6 = dns_data.get("aaaa", [])
         cname = dns_data.get("cname", [])
 
-        rows.append({
-            "subdomain": sub,
-            "a_records": ", ".join(ips) if ips else "-",
-            "aaaa_records": ", ".join(ipv6) if ipv6 else "-",
-            "cname": ", ".join(cname) if cname else "-",
-        })
+        rows.append(
+            {
+                "subdomain": sub,
+                "a_records": ", ".join(ips) if ips else "-",
+                "aaaa_records": ", ".join(ipv6) if ipv6 else "-",
+                "cname": ", ".join(cname) if cname else "-",
+            }
+        )
     return rows
 
 
@@ -258,32 +287,44 @@ def _build_ssl_table(probes: list[dict]) -> list[dict[str, str]]:
         ips = p["dns"].get("a", [])
 
         if s["has_ssl"]:
-            grade = "F" if not s["valid"] else (
-                "A" if (s["days_left"] or 0) > 90 else
-                "B" if (s["days_left"] or 0) > 30 else
-                "C" if (s["days_left"] or 0) > 0 else "F"
+            grade = (
+                "F"
+                if not s["valid"]
+                else (
+                    "A"
+                    if (s["days_left"] or 0) > 90
+                    else "B"
+                    if (s["days_left"] or 0) > 30
+                    else "C"
+                    if (s["days_left"] or 0) > 0
+                    else "F"
+                )
             )
-            rows.append({
-                "subdomain": sub,
-                "ip": ips[0] if ips else "-",
-                "valid": "Yes" if s["valid"] else "No",
-                "issuer": s["issuer"] or "-",
-                "expires": s["expires"] or "-",
-                "days_left": str(s["days_left"]) if s["days_left"] is not None else "-",
-                "protocol": s["protocol"] or "-",
-                "grade": grade,
-            })
+            rows.append(
+                {
+                    "subdomain": sub,
+                    "ip": ips[0] if ips else "-",
+                    "valid": "Yes" if s["valid"] else "No",
+                    "issuer": s["issuer"] or "-",
+                    "expires": s["expires"] or "-",
+                    "days_left": str(s["days_left"]) if s["days_left"] is not None else "-",
+                    "protocol": s["protocol"] or "-",
+                    "grade": grade,
+                }
+            )
         else:
-            rows.append({
-                "subdomain": sub,
-                "ip": ips[0] if ips else "-",
-                "valid": "No SSL",
-                "issuer": "-",
-                "expires": "-",
-                "days_left": "-",
-                "protocol": "-",
-                "grade": "-",
-            })
+            rows.append(
+                {
+                    "subdomain": sub,
+                    "ip": ips[0] if ips else "-",
+                    "valid": "No SSL",
+                    "issuer": "-",
+                    "expires": "-",
+                    "days_left": "-",
+                    "protocol": "-",
+                    "grade": "-",
+                }
+            )
     return rows
 
 
@@ -294,21 +335,24 @@ def _build_http_table(probes: list[dict]) -> list[dict[str, str]]:
         sub = p["subdomain"]
         h = p["http"]
         ms = h.get("response_ms")
-        rows.append({
-            "subdomain": sub,
-            "reachable": "Yes" if h["reachable"] else "No",
-            "https": "Yes" if h["https"] else "No",
-            "status": str(h["status_code"]) if h["status_code"] else "-",
-            "server": h["server"] or "-",
-            "response_ms": f"{ms}ms" if ms is not None else "-",
-            "redirect": h["redirect"] or "-",
-        })
+        rows.append(
+            {
+                "subdomain": sub,
+                "reachable": "Yes" if h["reachable"] else "No",
+                "https": "Yes" if h["https"] else "No",
+                "status": str(h["status_code"]) if h["status_code"] else "-",
+                "server": h["server"] or "-",
+                "response_ms": f"{ms}ms" if ms is not None else "-",
+                "redirect": h["redirect"] or "-",
+            }
+        )
     return rows
 
 
 # ═══════════════════════════════════════════════════════════════════
 #  Main scan
 # ═══════════════════════════════════════════════════════════════════
+
 
 def scan(domain: str, deep: bool = False) -> ScanResult:
     """Scan subdomains. deep=True probes each subdomain for DNS/SSL/HTTP (slower)."""
@@ -328,15 +372,10 @@ def scan(domain: str, deep: bool = False) -> ScanResult:
 
             if subs_to_scan:
                 with ThreadPoolExecutor(max_workers=10) as executor:
-                    futures = {
-                        executor.submit(_probe_subdomain, sub): sub
-                        for sub in subs_to_scan
-                    }
+                    futures = {executor.submit(_probe_subdomain, sub): sub for sub in subs_to_scan}
                     for future in as_completed(futures):
-                        try:
+                        with contextlib.suppress(Exception):
                             probes.append(future.result())
-                        except Exception:
-                            pass
         else:
             raw_data["scanned_count"] = 0
 
@@ -355,7 +394,6 @@ def scan(domain: str, deep: bool = False) -> ScanResult:
 
         # Count issues
         ssl_issues = [r for r in ssl_table if r["grade"] in ("C", "F")]
-        no_ssl = [r for r in ssl_table if r["valid"] == "No SSL"]
         no_https = [r for r in http_table if r["https"] == "No" and r["reachable"] == "Yes"]
 
         findings = []
@@ -368,14 +406,16 @@ def scan(domain: str, deep: bool = False) -> ScanResult:
         else:
             detail_msg += " (use deep=True to probe each subdomain)"
 
-        findings.append({
-            "label": "Subdomains discovered",
-            "value": all_subs,
-            "grade": "-",
-            "detail": detail_msg,
-            "fix": "",
-            "subdomain_list": all_subs,
-        })
+        findings.append(
+            {
+                "label": "Subdomains discovered",
+                "value": all_subs,
+                "grade": "-",
+                "detail": detail_msg,
+                "fix": "",
+                "subdomain_list": all_subs,
+            }
+        )
 
         # Only add detail tables if deep mode was used
         if not probes:
@@ -390,46 +430,56 @@ def scan(domain: str, deep: bool = False) -> ScanResult:
             )
 
         # DNS table finding
-        findings.append({
-            "label": "Subdomain DNS",
-            "value": dns_table,
-            "grade": "-",
-            "detail": f"DNS resolution for {len(dns_table)} subdomain(s)",
-            "fix": "",
-            "table_type": "dns",
-            "table_data": dns_table,
-            "domain": domain,
-        })
+        findings.append(
+            {
+                "label": "Subdomain DNS",
+                "value": dns_table,
+                "grade": "-",
+                "detail": f"DNS resolution for {len(dns_table)} subdomain(s)",
+                "fix": "",
+                "table_type": "dns",
+                "table_data": dns_table,
+                "domain": domain,
+            }
+        )
 
         # SSL table finding
         ssl_grade = "-"
         if ssl_issues:
             ssl_grade = "F" if any(r["grade"] == "F" for r in ssl_issues) else "C"
-        findings.append({
-            "label": "Subdomain SSL",
-            "value": ssl_table,
-            "grade": ssl_grade,
-            "detail": f"{len(ssl_issues)} SSL issue(s) across {len(ssl_table)} subdomain(s)" if ssl_issues else f"SSL healthy across {len([r for r in ssl_table if r['valid'] not in ('No SSL', '-')])} subdomain(s)",
-            "fix": "Review SSL certificates for flagged subdomains" if ssl_issues else "",
-            "table_type": "ssl",
-            "table_data": ssl_table,
-            "domain": domain,
-        })
+        findings.append(
+            {
+                "label": "Subdomain SSL",
+                "value": ssl_table,
+                "grade": ssl_grade,
+                "detail": f"{len(ssl_issues)} SSL issue(s) across {len(ssl_table)} subdomain(s)"
+                if ssl_issues
+                else f"SSL healthy across {len([r for r in ssl_table if r['valid'] not in ('No SSL', '-')])} subdomain(s)",
+                "fix": "Review SSL certificates for flagged subdomains" if ssl_issues else "",
+                "table_type": "ssl",
+                "table_data": ssl_table,
+                "domain": domain,
+            }
+        )
 
         # HTTP table finding
         http_grade = "-"
         if no_https:
             http_grade = "C"
-        findings.append({
-            "label": "Subdomain HTTP",
-            "value": http_table,
-            "grade": http_grade,
-            "detail": f"{len(no_https)} subdomain(s) not using HTTPS" if no_https else f"{len([r for r in http_table if r['reachable'] == 'Yes'])} subdomain(s) reachable",
-            "fix": "Enable HTTPS on all public-facing subdomains" if no_https else "",
-            "table_type": "http",
-            "table_data": http_table,
-            "domain": domain,
-        })
+        findings.append(
+            {
+                "label": "Subdomain HTTP",
+                "value": http_table,
+                "grade": http_grade,
+                "detail": f"{len(no_https)} subdomain(s) not using HTTPS"
+                if no_https
+                else f"{len([r for r in http_table if r['reachable'] == 'Yes'])} subdomain(s) reachable",
+                "fix": "Enable HTTPS on all public-facing subdomains" if no_https else "",
+                "table_type": "http",
+                "table_data": http_table,
+                "domain": domain,
+            }
+        )
 
         return ScanResult(
             module="subdomains",
@@ -446,13 +496,15 @@ def scan(domain: str, deep: bool = False) -> ScanResult:
             module="subdomains",
             status="error",
             grade="C",
-            findings=[{
-                "label": "Subdomain discovery failed",
-                "value": f"Error: {safe_error(exc)}",
-                "grade": "C",
-                "detail": f"Could not discover subdomains — all CT log sources failed: {safe_error(exc)}",
-                "fix": "Subdomain enumeration is incomplete. Try again or check network connectivity. CT log services (crt.sh, Cert Spotter) may be rate-limiting this IP.",
-            }],
+            findings=[
+                {
+                    "label": "Subdomain discovery failed",
+                    "value": f"Error: {safe_error(exc)}",
+                    "grade": "C",
+                    "detail": f"Could not discover subdomains — all CT log sources failed: {safe_error(exc)}",
+                    "fix": "Subdomain enumeration is incomplete. Try again or check network connectivity. CT log services (crt.sh, Cert Spotter) may be rate-limiting this IP.",
+                }
+            ],
             raw_data={"error": safe_error(exc)},
             elapsed=time.time() - start,
             retries=0,

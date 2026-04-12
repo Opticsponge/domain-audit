@@ -92,7 +92,9 @@ def _rdap_lookup(domain: str) -> dict[str, Any]:
         if "registrar" in roles:
             vcard = _rdap_vcard(entity)
             result["registrar"] = vcard.get("fn", None)
-            result["registrar_url"] = entity.get("publicIds", [{}])[0].get("identifier") if entity.get("publicIds") else None
+            result["registrar_url"] = (
+                entity.get("publicIds", [{}])[0].get("identifier") if entity.get("publicIds") else None
+            )
         if "registrant" in roles:
             vcard = _rdap_vcard(entity)
             result["name"] = vcard.get("fn", None)
@@ -122,15 +124,15 @@ def _rdap_vcard(entity: dict) -> dict[str, str]:
                     info["fn"] = str(value)
                 elif prop == "org":
                     info["org"] = str(value)
-                elif prop == "adr" and isinstance(value, list):
+                elif prop == "adr" and isinstance(value, list) and len(value) >= 7 and value[6]:
                     # Country is typically last element
-                    if len(value) >= 7 and value[6]:
-                        info["country"] = str(value[6])
+                    info["country"] = str(value[6])
     return info
 
 
 class _RdapAsWhois:
     """Adapter: makes RDAP result look like python-whois result."""
+
     def __init__(self, data: dict[str, Any]):
         self._data = data
 
@@ -177,52 +179,119 @@ def scan(domain: str) -> ScanResult:
         # ── Parsed WHOIS table ──
         parsed = []
         if w.registrar:
-            parsed.append({"tag": "Registrar", "value": w.registrar, "name": "Registrar", "description": "Domain registrar"})
+            parsed.append(
+                {"tag": "Registrar", "value": w.registrar, "name": "Registrar", "description": "Domain registrar"}
+            )
         if getattr(w, "registrar_url", None):
-            parsed.append({"tag": "Registrar URL", "value": str(getattr(w, "registrar_url")), "name": "URL", "description": "Registrar website"})
+            parsed.append(
+                {
+                    "tag": "Registrar URL",
+                    "value": str(w.registrar_url),
+                    "name": "URL",
+                    "description": "Registrar website",
+                }
+            )
         if raw_data["registrant"]:
-            parsed.append({"tag": "Registrant", "value": str(raw_data["registrant"]), "name": "Owner", "description": "Domain registrant (may be privacy-protected)"})
+            parsed.append(
+                {
+                    "tag": "Registrant",
+                    "value": str(raw_data["registrant"]),
+                    "name": "Owner",
+                    "description": "Domain registrant (may be privacy-protected)",
+                }
+            )
         if raw_data["registrant_country"]:
-            parsed.append({"tag": "Country", "value": str(raw_data["registrant_country"]), "name": "Country", "description": "Registrant country"})
+            parsed.append(
+                {
+                    "tag": "Country",
+                    "value": str(raw_data["registrant_country"]),
+                    "name": "Country",
+                    "description": "Registrant country",
+                }
+            )
         if raw_data["creation_date"]:
-            parsed.append({"tag": "Created", "value": raw_data["creation_date"], "name": "Creation Date", "description": "Domain registration date"})
+            parsed.append(
+                {
+                    "tag": "Created",
+                    "value": raw_data["creation_date"],
+                    "name": "Creation Date",
+                    "description": "Domain registration date",
+                }
+            )
         if raw_data["expiration_date"]:
-            parsed.append({"tag": "Expires", "value": raw_data["expiration_date"], "name": "Expiry Date", "description": "Domain expiration date"})
+            parsed.append(
+                {
+                    "tag": "Expires",
+                    "value": raw_data["expiration_date"],
+                    "name": "Expiry Date",
+                    "description": "Domain expiration date",
+                }
+            )
         if raw_data["updated_date"]:
-            parsed.append({"tag": "Updated", "value": raw_data["updated_date"], "name": "Last Updated", "description": "Last WHOIS record update"})
+            parsed.append(
+                {
+                    "tag": "Updated",
+                    "value": raw_data["updated_date"],
+                    "name": "Last Updated",
+                    "description": "Last WHOIS record update",
+                }
+            )
         if raw_data["whois_server"]:
-            parsed.append({"tag": "WHOIS Server", "value": str(raw_data["whois_server"]), "name": "Server", "description": "WHOIS server used"})
+            parsed.append(
+                {
+                    "tag": "WHOIS Server",
+                    "value": str(raw_data["whois_server"]),
+                    "name": "Server",
+                    "description": "WHOIS server used",
+                }
+            )
 
         # Status codes
         status = w.status
         if isinstance(status, str):
             status = [status]
         if status:
-            for s in (status or []):
+            for s in status or []:
                 s_clean = s.split()[0] if s else s  # Strip URL after status
-                parsed.append({"tag": "Status", "value": str(s_clean), "name": "EPP Status", "description": _epp_description(s_clean)})
+                parsed.append(
+                    {
+                        "tag": "Status",
+                        "value": str(s_clean),
+                        "name": "EPP Status",
+                        "description": _epp_description(s_clean),
+                    }
+                )
 
         # DNSSEC
         dnssec = getattr(w, "dnssec", None)
         if dnssec:
             dnssec_str = str(dnssec) if not isinstance(dnssec, list) else ", ".join(str(d) for d in dnssec)
-            parsed.append({"tag": "DNSSEC", "value": dnssec_str, "name": "DNSSEC", "description": "DNS Security Extensions status"})
+            parsed.append(
+                {
+                    "tag": "DNSSEC",
+                    "value": dnssec_str,
+                    "name": "DNSSEC",
+                    "description": "DNS Security Extensions status",
+                }
+            )
 
         # ── WHOIS tests ──
         tests = []
 
         # Registrar
-        findings.append({
-            "label": "WHOIS Record",
-            "value": w.registrar or "Unknown",
-            "grade": "-",
-            "detail": f"Registered with {w.registrar or 'unknown registrar'}",
-            "fix": "",
-            "parsed_record": parsed,
-            "tests": [],
-            "record_type": "WHOIS",
-            "domain": domain,
-        })
+        findings.append(
+            {
+                "label": "WHOIS Record",
+                "value": w.registrar or "Unknown",
+                "grade": "-",
+                "detail": f"Registered with {w.registrar or 'unknown registrar'}",
+                "fix": "",
+                "parsed_record": parsed,
+                "tests": [],
+                "record_type": "WHOIS",
+                "domain": domain,
+            }
+        )
 
         # Domain age
         created = _parse_date(w.creation_date)
@@ -232,17 +301,11 @@ def scan(domain: str) -> ScanResult:
             raw_data["domain_age_days"] = age_days
 
             if age_days < 30:
-                age_grade = "F"
                 age_detail = f"Domain is only {age_days} days old — very new, potentially suspicious"
-            elif age_days < 180:
-                age_grade = "C"
-                age_detail = f"Domain is {age_days} days old ({age_days // 30} months)"
             elif age_days < 365:
-                age_grade = "B"
                 age_detail = f"Domain is {age_days} days old ({age_days // 30} months)"
             else:
                 years = age_days // 365
-                age_grade = "A"
                 age_detail = f"Domain is {age_days} days old ({years} year{'s' if years != 1 else ''})"
 
             tests.append({"test": "Domain Age", "pass": age_days >= 180, "result": age_detail})
@@ -280,33 +343,47 @@ def scan(domain: str) -> ScanResult:
 
             tests.append({"test": "Domain Expiry", "pass": days_left > 90, "result": exp_detail})
 
-            findings.append({
-                "label": "Domain expiration",
-                "value": {"expires": _date_str(w.expiration_date), "days_left": days_left},
-                "grade": exp_grade,
-                "detail": exp_detail,
-                "fix": exp_fix,
-            })
+            findings.append(
+                {
+                    "label": "Domain expiration",
+                    "value": {"expires": _date_str(w.expiration_date), "days_left": days_left},
+                    "grade": exp_grade,
+                    "detail": exp_detail,
+                    "fix": exp_fix,
+                }
+            )
         else:
-            findings.append({
-                "label": "Domain expiration",
-                "value": "Unknown",
-                "grade": "?",
-                "detail": "Could not determine domain expiration date",
-                "fix": "",
-            })
+            findings.append(
+                {
+                    "label": "Domain expiration",
+                    "value": "Unknown",
+                    "grade": "?",
+                    "detail": "Could not determine domain expiration date",
+                    "fix": "",
+                }
+            )
             tests.append({"test": "Domain Expiry", "pass": False, "result": "Expiration date unknown"})
 
         # Privacy protection
         registrant = raw_data.get("registrant", "")
-        privacy_keywords = ["privacy", "proxy", "redacted", "data protected", "whoisguard", "domains by proxy", "contact privacy"]
+        privacy_keywords = [
+            "privacy",
+            "proxy",
+            "redacted",
+            "data protected",
+            "whoisguard",
+            "domains by proxy",
+            "contact privacy",
+        ]
         is_private = any(kw in str(registrant).lower() for kw in privacy_keywords) if registrant else False
         raw_data["privacy_protected"] = is_private
-        tests.append({
-            "test": "Privacy Protection",
-            "pass": True,
-            "result": "WHOIS privacy protection enabled" if is_private else "Registrant information is public",
-        })
+        tests.append(
+            {
+                "test": "Privacy Protection",
+                "pass": True,
+                "result": "WHOIS privacy protection enabled" if is_private else "Registrant information is public",
+            }
+        )
 
         # DNSSEC
         dnssec_val = getattr(w, "dnssec", None)
@@ -315,11 +392,15 @@ def scan(domain: str) -> ScanResult:
             dnssec_str = str(dnssec_val).lower()
             dnssec_enabled = "signed" in dnssec_str or dnssec_str not in ("unsigned", "none", "false", "")
         raw_data["dnssec_enabled"] = dnssec_enabled
-        tests.append({
-            "test": "DNSSEC",
-            "pass": dnssec_enabled,
-            "result": "DNSSEC is enabled" if dnssec_enabled else "DNSSEC is not enabled — vulnerable to DNS spoofing",
-        })
+        tests.append(
+            {
+                "test": "DNSSEC",
+                "pass": dnssec_enabled,
+                "result": "DNSSEC is enabled"
+                if dnssec_enabled
+                else "DNSSEC is not enabled — vulnerable to DNS spoofing",
+            }
+        )
 
         # EPP status codes check
         status_list = w.status or []
@@ -327,16 +408,24 @@ def scan(domain: str) -> ScanResult:
             status_list = [status_list]
         has_transfer_lock = any("clienttransferprohibited" in s.lower() for s in status_list)
         has_delete_lock = any("clientdeleteprohibited" in s.lower() for s in status_list)
-        tests.append({
-            "test": "Transfer Lock",
-            "pass": has_transfer_lock,
-            "result": "Domain is locked against unauthorized transfers" if has_transfer_lock else "Domain is NOT locked — vulnerable to unauthorized transfer",
-        })
-        tests.append({
-            "test": "Delete Lock",
-            "pass": has_delete_lock,
-            "result": "Domain is locked against deletion" if has_delete_lock else "Domain is NOT locked against deletion",
-        })
+        tests.append(
+            {
+                "test": "Transfer Lock",
+                "pass": has_transfer_lock,
+                "result": "Domain is locked against unauthorized transfers"
+                if has_transfer_lock
+                else "Domain is NOT locked — vulnerable to unauthorized transfer",
+            }
+        )
+        tests.append(
+            {
+                "test": "Delete Lock",
+                "pass": has_delete_lock,
+                "result": "Domain is locked against deletion"
+                if has_delete_lock
+                else "Domain is NOT locked against deletion",
+            }
+        )
 
         # Name servers
         ns = w.name_servers or []
@@ -344,16 +433,18 @@ def scan(domain: str) -> ScanResult:
             ns = [ns]
         ns = sorted(set(n.lower() for n in ns))
         raw_data["name_servers_clean"] = ns
-        tests.append({
-            "test": "Name Servers",
-            "pass": len(ns) >= 2,
-            "result": f"{len(ns)} name server(s) configured" + (" — should have at least 2" if len(ns) < 2 else ""),
-        })
+        tests.append(
+            {
+                "test": "Name Servers",
+                "pass": len(ns) >= 2,
+                "result": f"{len(ns)} name server(s) configured" + (" — should have at least 2" if len(ns) < 2 else ""),
+            }
+        )
 
         # Attach tests to the WHOIS record finding
         findings[0]["tests"] = tests
 
-        grades = [f["grade"] for f in findings if f["grade"] not in ("?", "-")]
+        grades = [str(f["grade"]) for f in findings if f["grade"] not in ("?", "-")]
         module_grade = worst_grade(grades) if grades else "?"
         status = "pass" if module_grade == "A" else "warn" if module_grade in ("B", "C") else "fail"
 
@@ -372,13 +463,15 @@ def scan(domain: str) -> ScanResult:
             module="whois",
             status="error",
             grade="?",
-            findings=[{
-                "label": "WHOIS lookup",
-                "value": f"Error: {safe_error(exc)}",
-                "grade": "?",
-                "detail": f"WHOIS lookup failed: {safe_error(exc)}",
-                "fix": "Domain may not support WHOIS or the WHOIS server is unreachable",
-            }],
+            findings=[
+                {
+                    "label": "WHOIS lookup",
+                    "value": f"Error: {safe_error(exc)}",
+                    "grade": "?",
+                    "detail": f"WHOIS lookup failed: {safe_error(exc)}",
+                    "fix": "Domain may not support WHOIS or the WHOIS server is unreachable",
+                }
+            ],
             raw_data={"error": safe_error(exc)},
             elapsed=time.time() - start,
             retries=retries,

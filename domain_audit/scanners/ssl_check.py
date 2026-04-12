@@ -56,31 +56,33 @@ def scan(domain: str) -> ScanResult:
             exp_grade = "A"
             exp_detail = f"Certificate valid for {days_left} more days"
 
-        findings.append({
-            "label": "Certificate expiration",
-            "value": {"expires": not_after, "days_left": days_left},
-            "grade": exp_grade,
-            "detail": exp_detail,
-            "fix": "Renew your SSL certificate" if exp_grade != "A" else "",
-        })
+        findings.append(
+            {
+                "label": "Certificate expiration",
+                "value": {"expires": not_after, "days_left": days_left},
+                "grade": exp_grade,
+                "detail": exp_detail,
+                "fix": "Renew your SSL certificate" if exp_grade != "A" else "",
+            }
+        )
 
         # Issuer
         issuer = dict(x[0] for x in cert.get("issuer", []))
         raw_data["issuer"] = issuer
-        findings.append({
-            "label": "Certificate issuer",
-            "value": issuer.get("organizationName", "Unknown"),
-            "grade": "-",
-            "detail": f"Issued by {issuer.get('organizationName', 'Unknown')}",
-            "fix": "",
-        })
+        findings.append(
+            {
+                "label": "Certificate issuer",
+                "value": issuer.get("organizationName", "Unknown"),
+                "grade": "-",
+                "detail": f"Issued by {issuer.get('organizationName', 'Unknown')}",
+                "fix": "",
+            }
+        )
 
         # Subject Alternative Names
         sans = [entry[1] for entry in cert.get("subjectAltName", [])]
         raw_data["sans"] = sans
-        hostname_match = any(
-            _hostname_matches(domain, san) for san in sans
-        )
+        hostname_match = any(_hostname_matches(domain, san) for san in sans)
 
         if hostname_match:
             match_grade = "A"
@@ -89,13 +91,15 @@ def scan(domain: str) -> ScanResult:
             match_grade = "F"
             match_detail = f"Certificate does NOT match {domain} — SANs: {sans}"
 
-        findings.append({
-            "label": "Hostname match",
-            "value": {"match": hostname_match, "sans": sans},
-            "grade": match_grade,
-            "detail": match_detail,
-            "fix": "Get a certificate that covers this domain" if not hostname_match else "",
-        })
+        findings.append(
+            {
+                "label": "Hostname match",
+                "value": {"match": hostname_match, "sans": sans},
+                "grade": match_grade,
+                "detail": match_detail,
+                "fix": "Get a certificate that covers this domain" if not hostname_match else "",
+            }
+        )
 
         # Protocol version
         weak_protocols = {"SSLv2", "SSLv3", "TLSv1", "TLSv1.0", "TLSv1.1"}
@@ -108,15 +112,17 @@ def scan(domain: str) -> ScanResult:
             proto_detail = f"Using {protocol}"
             proto_fix = ""
 
-        findings.append({
-            "label": "Protocol version",
-            "value": protocol,
-            "grade": proto_grade,
-            "detail": proto_detail,
-            "fix": proto_fix,
-        })
+        findings.append(
+            {
+                "label": "Protocol version",
+                "value": protocol,
+                "grade": proto_grade,
+                "detail": proto_detail,
+                "fix": proto_fix,
+            }
+        )
 
-        grades = [f["grade"] for f in findings if f["grade"] not in ("?", "-")]
+        grades = [str(f["grade"]) for f in findings if f["grade"] not in ("?", "-")]
         module_grade = worst_grade(grades) if grades else "?"
         status = "pass" if module_grade == "A" else "warn" if module_grade in ("B", "C") else "fail"
 
@@ -135,13 +141,15 @@ def scan(domain: str) -> ScanResult:
             module="ssl",
             status="error",
             grade="?",
-            findings=[{
-                "label": "SSL/TLS connection",
-                "value": f"Error: {safe_error(exc)}",
-                "grade": "?",
-                "detail": f"Could not establish SSL connection: {safe_error(exc)}",
-                "fix": "Verify the domain has SSL/TLS enabled on port 443",
-            }],
+            findings=[
+                {
+                    "label": "SSL/TLS connection",
+                    "value": f"Error: {safe_error(exc)}",
+                    "grade": "?",
+                    "detail": f"Could not establish SSL connection: {safe_error(exc)}",
+                    "fix": "Verify the domain has SSL/TLS enabled on port 443",
+                }
+            ],
             raw_data={"error": safe_error(exc)},
             elapsed=time.time() - start,
             retries=retries,

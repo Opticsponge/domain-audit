@@ -4,11 +4,11 @@ import socket
 import time
 from typing import Any
 
-import dns.resolver
 import dns.exception
 import dns.query
-import dns.zone
 import dns.rdatatype
+import dns.resolver
+import dns.zone
 
 from domain_audit.grader import ScanResult, worst_grade
 from domain_audit.rate_limit import throttle
@@ -51,9 +51,7 @@ def _check_zone_transfer(domain: str) -> dict[str, Any]:
                 ns_ips = _resolve(ns, "A")
                 for ns_ip in ns_ips:
                     try:
-                        zone = dns.zone.from_xfr(
-                            dns.query.xfr(ns_ip, domain, timeout=5.0, lifetime=5.0)
-                        )
+                        zone = dns.zone.from_xfr(dns.query.xfr(ns_ip, domain, timeout=5.0, lifetime=5.0))
                         if zone:
                             result["vulnerable"] = True
                             result["vulnerable_ns"].append(ns)
@@ -82,18 +80,24 @@ def _parse_caa(records: list[str]) -> list[dict[str, str]]:
                 "issuewild": "Authorized CA for wildcard certificates",
                 "iodef": "URL for reporting certificate issue violations",
             }.get(tag, f"CAA tag: {tag}")
-            parsed.append({
-                "flags": flags,
-                "tag": tag,
-                "value": value,
-                "description": desc,
-            })
+            parsed.append(
+                {
+                    "flags": flags,
+                    "tag": tag,
+                    "value": value,
+                    "description": desc,
+                }
+            )
     return parsed
 
 
 DANGEROUS_PORTS = {
-    1433: "MSSQL", 3306: "MySQL", 3389: "RDP", 5432: "PostgreSQL",
-    9200: "Elasticsearch", 27017: "MongoDB",
+    1433: "MSSQL",
+    3306: "MySQL",
+    3389: "RDP",
+    5432: "PostgreSQL",
+    9200: "Elasticsearch",
+    27017: "MongoDB",
 }
 
 
@@ -114,13 +118,18 @@ def _check_port(ip: str, port: int) -> bool:
 def _check_ips(ips: list[str]) -> list[dict[str, Any]]:
     """Get reverse DNS, geolocation, and dangerous port scan for each IP."""
     import requests
+
     results = []
     # Filter out private/reserved IPs before scanning
     ips = [ip for ip in ips if not is_private_ip(ip)]
     for ip in ips[:5]:  # Limit to 5 IPs
         info: dict[str, Any] = {
-            "ip": ip, "reverse_dns": "-", "org": "-",
-            "city": "-", "country": "-", "open_dangerous_ports": [],
+            "ip": ip,
+            "reverse_dns": "-",
+            "org": "-",
+            "city": "-",
+            "country": "-",
+            "open_dangerous_ports": [],
         }
 
         # Reverse DNS
@@ -178,55 +187,81 @@ def scan(domain: str) -> ScanResult:
                 if found:
                     parsed_caa = _parse_caa(records)
                     raw_data["caa_parsed"] = parsed_caa
-                    findings.append({
-                        "label": "CAA records",
-                        "value": records,
-                        "grade": "A",
-                        "detail": f"CAA record(s) found — restricts which CAs can issue certificates",
-                        "fix": "",
-                        "parsed_record": [
-                            {"tag": p["tag"], "value": p["value"], "name": f"Flags: {p['flags']}", "description": p["description"]}
-                            for p in parsed_caa
-                        ],
-                        "tests": [
-                            {"test": "CAA Record Published", "pass": True, "result": f"Found {len(parsed_caa)} CAA record(s)"},
-                            {"test": "Issue Tag Present", "pass": any(p["tag"] == "issue" for p in parsed_caa),
-                             "result": "Authorized CAs specified" if any(p["tag"] == "issue" for p in parsed_caa) else "No 'issue' tag — any CA can issue certs"},
-                        ],
-                        "record_type": "CAA",
-                        "domain": domain,
-                    })
+                    findings.append(
+                        {
+                            "label": "CAA records",
+                            "value": records,
+                            "grade": "A",
+                            "detail": "CAA record(s) found — restricts which CAs can issue certificates",
+                            "fix": "",
+                            "parsed_record": [
+                                {
+                                    "tag": p["tag"],
+                                    "value": p["value"],
+                                    "name": f"Flags: {p['flags']}",
+                                    "description": p["description"],
+                                }
+                                for p in parsed_caa
+                            ],
+                            "tests": [
+                                {
+                                    "test": "CAA Record Published",
+                                    "pass": True,
+                                    "result": f"Found {len(parsed_caa)} CAA record(s)",
+                                },
+                                {
+                                    "test": "Issue Tag Present",
+                                    "pass": any(p["tag"] == "issue" for p in parsed_caa),
+                                    "result": "Authorized CAs specified"
+                                    if any(p["tag"] == "issue" for p in parsed_caa)
+                                    else "No 'issue' tag — any CA can issue certs",
+                                },
+                            ],
+                            "record_type": "CAA",
+                            "domain": domain,
+                        }
+                    )
                 else:
-                    findings.append({
-                        "label": "CAA records",
-                        "value": "Not found",
-                        "grade": "C",
-                        "detail": "No CAA record — any CA can issue certificates for this domain",
-                        "fix": "Add CAA record: 0 issue \"letsencrypt.org\" (adjust for your CA)",
-                        "tests": [
-                            {"test": "CAA Record Published", "pass": False, "result": "No CAA record found — any Certificate Authority can issue certs for this domain"},
-                        ],
-                        "record_type": "CAA",
-                        "domain": domain,
-                    })
+                    findings.append(
+                        {
+                            "label": "CAA records",
+                            "value": "Not found",
+                            "grade": "C",
+                            "detail": "No CAA record — any CA can issue certificates for this domain",
+                            "fix": 'Add CAA record: 0 issue "letsencrypt.org" (adjust for your CA)',
+                            "tests": [
+                                {
+                                    "test": "CAA Record Published",
+                                    "pass": False,
+                                    "result": "No CAA record found — any Certificate Authority can issue certs for this domain",
+                                },
+                            ],
+                            "record_type": "CAA",
+                            "domain": domain,
+                        }
+                    )
             else:
                 grade = "A" if found else _missing_grade(rdtype)
-                findings.append({
-                    "label": f"{rdtype} records",
-                    "value": records if found else "Not found",
-                    "grade": grade,
-                    "detail": f"{'Found' if found else 'Missing'} {rdtype} record{'s' if len(records) != 1 else ''}",
-                    "fix": _fix_suggestion(rdtype) if not found else "",
-                })
+                findings.append(
+                    {
+                        "label": f"{rdtype} records",
+                        "value": records if found else "Not found",
+                        "grade": grade,
+                        "detail": f"{'Found' if found else 'Missing'} {rdtype} record{'s' if len(records) != 1 else ''}",
+                        "fix": _fix_suggestion(rdtype) if not found else "",
+                    }
+                )
         except Exception as exc:
             raw_data[rdtype] = safe_error(exc)
-            findings.append({
-                "label": f"{rdtype} records",
-                "value": f"Error: {safe_error(exc)}",
-                "grade": "?",
-                "detail": f"Could not query {rdtype}: {exc}",
-                "fix": "",
-            })
+            findings.append(
+                {
+                    "label": f"{rdtype} records",
+                    "value": f"Error: {safe_error(exc)}",
+                    "grade": "?",
+                    "detail": f"Could not query {rdtype}: {exc}",
+                    "fix": "",
+                }
+            )
 
     # ── IP info for A records ──
     a_records = raw_data.get("A", [])
@@ -238,47 +273,58 @@ def scan(domain: str) -> ScanResult:
         all_dangerous = []
         for info in ip_info:
             dangerous = info.get("open_dangerous_ports", [])
-            dangerous_str = ", ".join("{}/{}".format(p["port"], p["service"]) for p in dangerous) if dangerous else "None"
+            dangerous_str = (
+                ", ".join("{}/{}".format(p["port"], p["service"]) for p in dangerous) if dangerous else "None"
+            )
             all_dangerous.extend(dangerous)
 
-            ip_table.append({
-                "tag": info["ip"],
-                "value": info.get("reverse_dns", "-"),
-                "name": info.get("org", "-"),
-                "description": "{}, {} | Dangerous ports: {}".format(
-                    info.get("city", ""), info.get("country", ""), dangerous_str
-                ).strip(", "),
-            })
+            ip_table.append(
+                {
+                    "tag": info["ip"],
+                    "value": info.get("reverse_dns", "-"),
+                    "name": info.get("org", "-"),
+                    "description": "{}, {} | Dangerous ports: {}".format(
+                        info.get("city", ""), info.get("country", ""), dangerous_str
+                    ).strip(", "),
+                }
+            )
 
         ip_tests = []
         if all_dangerous:
             ports_str = ", ".join("{}/{}".format(p["port"], p["service"]) for p in all_dangerous)
-            ip_tests.append({
-                "test": "Dangerous Ports on IP",
-                "pass": False,
-                "result": f"Found open dangerous ports: {ports_str}",
-            })
+            ip_tests.append(
+                {
+                    "test": "Dangerous Ports on IP",
+                    "pass": False,
+                    "result": f"Found open dangerous ports: {ports_str}",
+                }
+            )
             ip_grade = "F"
         else:
-            ip_tests.append({
-                "test": "Dangerous Ports on IP",
-                "pass": True,
-                "result": f"No dangerous ports open on {len(a_records)} IP(s)",
-            })
+            ip_tests.append(
+                {
+                    "test": "Dangerous Ports on IP",
+                    "pass": True,
+                    "result": f"No dangerous ports open on {len(a_records)} IP(s)",
+                }
+            )
             ip_grade = "-"
 
         if ip_table:
-            findings.append({
-                "label": "IP Address Info",
-                "value": ip_info,
-                "grade": ip_grade,
-                "detail": f"Resolved to {len(a_records)} IP(s)" + (f" — {len(all_dangerous)} dangerous port(s) open!" if all_dangerous else ""),
-                "fix": "Close dangerous ports or restrict access via firewall" if all_dangerous else "",
-                "parsed_record": ip_table,
-                "tests": ip_tests,
-                "record_type": "IP Info",
-                "domain": domain,
-            })
+            findings.append(
+                {
+                    "label": "IP Address Info",
+                    "value": ip_info,
+                    "grade": ip_grade,
+                    "detail": f"Resolved to {len(a_records)} IP(s)"
+                    + (f" — {len(all_dangerous)} dangerous port(s) open!" if all_dangerous else ""),
+                    "fix": "Close dangerous ports or restrict access via firewall" if all_dangerous else "",
+                    "parsed_record": ip_table,
+                    "tests": ip_tests,
+                    "record_type": "IP Info",
+                    "domain": domain,
+                }
+            )
 
     # ── Zone transfer test ──
     zt = _check_zone_transfer(domain)
@@ -286,32 +332,44 @@ def scan(domain: str) -> ScanResult:
 
     if zt["vulnerable"]:
         ns_list = ", ".join(zt["vulnerable_ns"])
-        findings.append({
-            "label": "DNS Zone Transfer",
-            "value": f"VULNERABLE: {ns_list}",
-            "grade": "F",
-            "detail": f"Zone transfer (AXFR) is OPEN on: {ns_list} — exposes all DNS records",
-            "fix": "Disable AXFR on your nameservers or restrict to authorized secondary NS only",
-            "tests": [
-                {"test": "Zone Transfer (AXFR)", "pass": False, "result": f"AXFR allowed on {ns_list} — all DNS records are exposed to anyone"},
-            ],
-            "record_type": "Zone Transfer",
-            "domain": domain,
-        })
+        findings.append(
+            {
+                "label": "DNS Zone Transfer",
+                "value": f"VULNERABLE: {ns_list}",
+                "grade": "F",
+                "detail": f"Zone transfer (AXFR) is OPEN on: {ns_list} — exposes all DNS records",
+                "fix": "Disable AXFR on your nameservers or restrict to authorized secondary NS only",
+                "tests": [
+                    {
+                        "test": "Zone Transfer (AXFR)",
+                        "pass": False,
+                        "result": f"AXFR allowed on {ns_list} — all DNS records are exposed to anyone",
+                    },
+                ],
+                "record_type": "Zone Transfer",
+                "domain": domain,
+            }
+        )
     else:
         tested = ", ".join(zt["nameservers_tested"]) if zt["nameservers_tested"] else "none found"
-        findings.append({
-            "label": "DNS Zone Transfer",
-            "value": "Not vulnerable",
-            "grade": "A",
-            "detail": f"Zone transfer (AXFR) properly restricted",
-            "fix": "",
-            "tests": [
-                {"test": "Zone Transfer (AXFR)", "pass": True, "result": f"AXFR correctly denied (tested: {tested})"},
-            ],
-            "record_type": "Zone Transfer",
-            "domain": domain,
-        })
+        findings.append(
+            {
+                "label": "DNS Zone Transfer",
+                "value": "Not vulnerable",
+                "grade": "A",
+                "detail": "Zone transfer (AXFR) properly restricted",
+                "fix": "",
+                "tests": [
+                    {
+                        "test": "Zone Transfer (AXFR)",
+                        "pass": True,
+                        "result": f"AXFR correctly denied (tested: {tested})",
+                    },
+                ],
+                "record_type": "Zone Transfer",
+                "domain": domain,
+            }
+        )
 
     grades = [f["grade"] for f in findings if f["grade"] not in ("?", "-")]
     module_grade = worst_grade(grades) if grades else "?"
@@ -348,5 +406,3 @@ def _fix_suggestion(rdtype: str) -> str:
         "SRV": "",
     }
     return suggestions.get(rdtype, "")
-
-

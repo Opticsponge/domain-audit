@@ -8,9 +8,9 @@ import re
 # Valid domain: at least two labels, each label is alphanumeric + hyphens,
 # TLD is alphabetic (no all-numeric TLDs exist).
 _DOMAIN_RE = re.compile(
-    r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)"       # first label
-    r"(\.[A-Za-z0-9-]{1,63})*"               # middle labels
-    r"\.[A-Za-z]{2,63}$"                      # TLD
+    r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)"  # first label
+    r"(\.[A-Za-z0-9-]{1,63})*"  # middle labels
+    r"\.[A-Za-z]{2,63}$"  # TLD
 )
 
 
@@ -37,8 +37,7 @@ def validate_domain(domain: str) -> str:
 
     if not _DOMAIN_RE.match(domain):
         raise DomainValidationError(
-            f"Invalid domain name: {domain!r}. "
-            "Must be a fully-qualified domain (e.g. example.com)"
+            f"Invalid domain name: {domain!r}. Must be a fully-qualified domain (e.g. example.com)"
         )
 
     return domain
@@ -67,8 +66,7 @@ def validate_resolved_ip(ip_str: str, domain: str = "") -> None:
     if is_private_ip(ip_str):
         ctx = f" (resolved from {domain})" if domain else ""
         raise PrivateIPError(
-            f"Refusing to scan private/reserved IP {ip_str}{ctx}. "
-            "Only publicly-routable addresses are allowed."
+            f"Refusing to scan private/reserved IP {ip_str}{ctx}. Only publicly-routable addresses are allowed."
         )
 
 

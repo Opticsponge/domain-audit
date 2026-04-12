@@ -1,11 +1,14 @@
 """Category-based tabular report — one table per check type, all domains sorted by risk."""
+
 from __future__ import annotations
 
 import html as html_mod
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from domain_audit.scanners.ports import (
-    DANGEROUS_PORTS, EXPECTED_PORTS, ACCEPTABLE_PORTS,
+    ACCEPTABLE_PORTS,
+    DANGEROUS_PORTS,
+    EXPECTED_PORTS,
 )
 
 if TYPE_CHECKING:
@@ -43,8 +46,12 @@ def _port_status_text(open_count: int, closed: int, filtered: int) -> str:
 
 GRADE_ORDER = {"F": 0, "C": 1, "B": 2, "A": 3, "-": 4, "?": 5}
 GRADE_COLORS = {
-    "A": "#22c55e", "B": "#eab308", "C": "#f97316", "F": "#ef4444",
-    "?": "#6b7280", "-": "#6b7280",
+    "A": "#22c55e",
+    "B": "#eab308",
+    "C": "#f97316",
+    "F": "#ef4444",
+    "?": "#6b7280",
+    "-": "#6b7280",
 }
 
 
@@ -60,6 +67,7 @@ def render_html(result: AuditResult, grade_filter: str = "all") -> str:
 
     # Unique ID for filter JS (needed before sections)
     import uuid
+
     uid = f"rpt{uuid.uuid4().hex[:8]}"
 
     sections = []
@@ -73,36 +81,101 @@ def render_html(result: AuditResult, grade_filter: str = "all") -> str:
 
     # Each section: (title, subtitle, module_key, row_builder, columns)
     _SECTION_DEFS = [
-        ("SSL / TLS", "Certificate health across all domains", "ssl", _build_ssl_rows, [
-            ("Domain", "domain", True), ("Grade", "grade", False), ("Valid", "valid", False),
-            ("Issuer", "issuer", False), ("Days Left", "days_left", False), ("Protocol", "protocol", False),
-        ]),
-        ("DNS Records", "Record resolution across all domains", "dns", _build_dns_rows, [
-            ("Domain", "domain", True), ("A", "a", False), ("AAAA", "aaaa", False),
-            ("CNAME", "cname", False), ("MX", "mx", False), ("NS", "ns", False),
-        ]),
-        ("HTTP / Headers", "Reachability and security headers", "headers", _build_http_rows, [
-            ("Domain", "domain", True), ("Grade", "grade", False), ("HTTPS", "https", False),
-            ("HSTS", "hsts", False), ("CSP", "csp", False), ("Status", "status", False),
-            ("Server", "server", False), ("Time", "response_ms", False),
-        ]),
-        ("Email Security", "SPF, DKIM, DMARC status", "email", _build_email_rows, [
-            ("Domain", "domain", True), ("Grade", "grade", False), ("SPF", "spf", False),
-            ("DKIM", "dkim", False), ("DMARC", "dmarc", False), ("SPF Lookups", "spf_lookups", False),
-        ]),
-        ("Open Ports", "Exposed services", "ports", _build_ports_rows, [
-            ("Domain", "domain", True), ("Grade", "grade", False),
-            ("Open Ports", "open_ports", False), ("Dangerous", "dangerous", False),
-            ("Status", "status", False),
-        ]),
-        ("WHOIS", "Domain registration", "whois", _build_whois_rows, [
-            ("Domain", "domain", True), ("Grade", "grade", False),
-            ("Registrar", "registrar", False), ("Days Left", "days_left", False),
-        ]),
-        ("Tech Stack", "Detected technologies", "tech", _build_tech_rows, [
-            ("Domain", "domain", True), ("Category", "category", False),
-            ("Technologies", "techs", False), ("Source", "source", False),
-        ]),
+        (
+            "SSL / TLS",
+            "Certificate health across all domains",
+            "ssl",
+            _build_ssl_rows,
+            [
+                ("Domain", "domain", True),
+                ("Grade", "grade", False),
+                ("Valid", "valid", False),
+                ("Issuer", "issuer", False),
+                ("Days Left", "days_left", False),
+                ("Protocol", "protocol", False),
+            ],
+        ),
+        (
+            "DNS Records",
+            "Record resolution across all domains",
+            "dns",
+            _build_dns_rows,
+            [
+                ("Domain", "domain", True),
+                ("A", "a", False),
+                ("AAAA", "aaaa", False),
+                ("CNAME", "cname", False),
+                ("MX", "mx", False),
+                ("NS", "ns", False),
+            ],
+        ),
+        (
+            "HTTP / Headers",
+            "Reachability and security headers",
+            "headers",
+            _build_http_rows,
+            [
+                ("Domain", "domain", True),
+                ("Grade", "grade", False),
+                ("HTTPS", "https", False),
+                ("HSTS", "hsts", False),
+                ("CSP", "csp", False),
+                ("Status", "status", False),
+                ("Server", "server", False),
+                ("Time", "response_ms", False),
+            ],
+        ),
+        (
+            "Email Security",
+            "SPF, DKIM, DMARC status",
+            "email",
+            _build_email_rows,
+            [
+                ("Domain", "domain", True),
+                ("Grade", "grade", False),
+                ("SPF", "spf", False),
+                ("DKIM", "dkim", False),
+                ("DMARC", "dmarc", False),
+                ("SPF Lookups", "spf_lookups", False),
+            ],
+        ),
+        (
+            "Open Ports",
+            "Exposed services",
+            "ports",
+            _build_ports_rows,
+            [
+                ("Domain", "domain", True),
+                ("Grade", "grade", False),
+                ("Open Ports", "open_ports", False),
+                ("Dangerous", "dangerous", False),
+                ("Status", "status", False),
+            ],
+        ),
+        (
+            "WHOIS",
+            "Domain registration",
+            "whois",
+            _build_whois_rows,
+            [
+                ("Domain", "domain", True),
+                ("Grade", "grade", False),
+                ("Registrar", "registrar", False),
+                ("Days Left", "days_left", False),
+            ],
+        ),
+        (
+            "Tech Stack",
+            "Detected technologies",
+            "tech",
+            _build_tech_rows,
+            [
+                ("Domain", "domain", True),
+                ("Category", "category", False),
+                ("Technologies", "techs", False),
+                ("Source", "source", False),
+            ],
+        ),
     ]
 
     for title, subtitle, module, row_builder, columns in _SECTION_DEFS:
@@ -221,6 +294,7 @@ def render_html(result: AuditResult, grade_filter: str = "all") -> str:
     tech_raw = result.results.get("tech", None)
     if tech_raw:
         from domain_audit.scanners.tech_detect import _TECH_TO_CATEGORY
+
         techs = tech_raw.raw_data.get("technologies", [])
         tech_items = ""
         for t in techs[:8]:  # Limit to 8 in header
@@ -263,7 +337,9 @@ def display(result: AuditResult, grade_filter: str = "all") -> None:
                       "F"/"C"/"B"/"A" pre-activates that filter on load.
     """
     try:
-        from IPython.display import display as ipy_display, HTML
+        from IPython.display import HTML
+        from IPython.display import display as ipy_display
+
         ipy_display(HTML(render_html(result, grade_filter=grade_filter)))
     except ImportError:
         print(render_html(result, grade_filter=grade_filter))
@@ -272,6 +348,7 @@ def display(result: AuditResult, grade_filter: str = "all") -> None:
 # ═══════════════════════════════════════════════════════════════════
 #  Row builders — extract data from AuditResult into flat rows
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _build_ssl_rows(result: AuditResult) -> list[dict]:
     rows = []
@@ -283,49 +360,68 @@ def _build_ssl_rows(result: AuditResult) -> list[dict]:
             if f.get("label") == "Certificate expiration":
                 val = f.get("value", {})
                 days = val.get("days_left", "?") if isinstance(val, dict) else "?"
-                rows.append({
-                    "domain": result.domain,
-                    "grade": r.grade,
-                    "valid": "Yes" if r.grade != "?" else "No",
-                    "issuer": _find_finding(r, "Certificate issuer"),
-                    "days_left": str(days),
-                    "protocol": _find_finding(r, "Protocol version"),
-                })
+                rows.append(
+                    {
+                        "domain": result.domain,
+                        "grade": r.grade,
+                        "valid": "Yes" if r.grade != "?" else "No",
+                        "issuer": _find_finding(r, "Certificate issuer"),
+                        "days_left": str(days),
+                        "protocol": _find_finding(r, "Protocol version"),
+                    }
+                )
                 break
         else:
             if r.status == "error":
-                rows.append({
-                    "domain": result.domain, "grade": "?", "valid": "Error",
-                    "issuer": "-", "days_left": "-", "protocol": "-",
-                })
+                rows.append(
+                    {
+                        "domain": result.domain,
+                        "grade": "?",
+                        "valid": "Error",
+                        "issuer": "-",
+                        "days_left": "-",
+                        "protocol": "-",
+                    }
+                )
 
     # Subdomain SSL from probes
     if "subdomains" in result.results:
         raw = result.results["subdomains"].raw_data
         for probe in raw.get("probes", []):
             s = probe.get("ssl", {})
-            ips = probe.get("dns", {}).get("a", [])
             if s.get("has_ssl"):
-                grade = "A" if (s.get("days_left") or 0) > 90 else "B" if (s.get("days_left") or 0) > 30 else "C" if (s.get("days_left") or 0) > 0 else "F"
+                grade = (
+                    "A"
+                    if (s.get("days_left") or 0) > 90
+                    else "B"
+                    if (s.get("days_left") or 0) > 30
+                    else "C"
+                    if (s.get("days_left") or 0) > 0
+                    else "F"
+                )
                 if not s.get("valid"):
                     grade = "F"
-                rows.append({
-                    "domain": probe["subdomain"],
-                    "grade": grade,
-                    "valid": "Yes" if s.get("valid") else "Invalid",
-                    "issuer": s.get("issuer") or "-",
-                    "days_left": str(s.get("days_left", "-")),
-                    "protocol": s.get("protocol") or "-",
-                })
+                rows.append(
+                    {
+                        "domain": probe["subdomain"],
+                        "grade": grade,
+                        "valid": "Yes" if s.get("valid") else "Invalid",
+                        "issuer": s.get("issuer") or "-",
+                        "days_left": str(s.get("days_left", "-")),
+                        "protocol": s.get("protocol") or "-",
+                    }
+                )
             else:
-                rows.append({
-                    "domain": probe["subdomain"],
-                    "grade": "-",
-                    "valid": "No SSL",
-                    "issuer": "-",
-                    "days_left": "-",
-                    "protocol": "-",
-                })
+                rows.append(
+                    {
+                        "domain": probe["subdomain"],
+                        "grade": "-",
+                        "valid": "No SSL",
+                        "issuer": "-",
+                        "days_left": "-",
+                        "protocol": "-",
+                    }
+                )
 
     rows.sort(key=lambda r: GRADE_ORDER.get(r["grade"], 99))
     return rows
@@ -337,27 +433,31 @@ def _build_dns_rows(result: AuditResult) -> list[dict]:
     # Main domain DNS
     if "dns" in result.results:
         raw = result.results["dns"].raw_data
-        rows.append({
-            "domain": result.domain,
-            "a": ", ".join(raw.get("A", [])) or "-",
-            "aaaa": ", ".join(raw.get("AAAA", [])) or "-",
-            "cname": ", ".join(raw.get("CNAME", [])) or "-",
-            "mx": ", ".join(raw.get("MX", [])) or "-",
-            "ns": ", ".join(raw.get("NS", [])) or "-",
-        })
+        rows.append(
+            {
+                "domain": result.domain,
+                "a": ", ".join(raw.get("A", [])) or "-",
+                "aaaa": ", ".join(raw.get("AAAA", [])) or "-",
+                "cname": ", ".join(raw.get("CNAME", [])) or "-",
+                "mx": ", ".join(raw.get("MX", [])) or "-",
+                "ns": ", ".join(raw.get("NS", [])) or "-",
+            }
+        )
 
     # Subdomain DNS from probes
     if "subdomains" in result.results:
         for probe in result.results["subdomains"].raw_data.get("probes", []):
             d = probe.get("dns", {})
-            rows.append({
-                "domain": probe["subdomain"],
-                "a": ", ".join(d.get("a", [])) or "-",
-                "aaaa": ", ".join(d.get("aaaa", [])) or "-",
-                "cname": ", ".join(d.get("cname", [])) or "-",
-                "mx": "-",
-                "ns": "-",
-            })
+            rows.append(
+                {
+                    "domain": probe["subdomain"],
+                    "a": ", ".join(d.get("a", [])) or "-",
+                    "aaaa": ", ".join(d.get("aaaa", [])) or "-",
+                    "cname": ", ".join(d.get("cname", [])) or "-",
+                    "mx": "-",
+                    "ns": "-",
+                }
+            )
 
     return rows
 
@@ -370,16 +470,18 @@ def _build_http_rows(result: AuditResult) -> list[dict]:
         r = result.results["headers"]
         raw_headers = r.raw_data.get("headers", {})
         hl = {k.lower(): v for k, v in raw_headers.items()}
-        rows.append({
-            "domain": result.domain,
-            "grade": r.grade,
-            "https": "Yes",
-            "hsts": "Yes" if "strict-transport-security" in hl else "No",
-            "csp": "Yes" if "content-security-policy" in hl else "No",
-            "status": "200",
-            "server": hl.get("server", "-"),
-            "response_ms": "-",
-        })
+        rows.append(
+            {
+                "domain": result.domain,
+                "grade": r.grade,
+                "https": "Yes",
+                "hsts": "Yes" if "strict-transport-security" in hl else "No",
+                "csp": "Yes" if "content-security-policy" in hl else "No",
+                "status": "200",
+                "server": hl.get("server", "-"),
+                "response_ms": "-",
+            }
+        )
 
     # Subdomain HTTP from probes
     if "subdomains" in result.results:
@@ -387,22 +489,25 @@ def _build_http_rows(result: AuditResult) -> list[dict]:
             h = probe.get("http", {})
             if h.get("reachable"):
                 ms = h.get("response_ms")
-                rows.append({
-                    "domain": probe["subdomain"],
-                    "grade": "-",
-                    "https": "Yes" if h.get("https") else "No",
-                    "hsts": "-",
-                    "csp": "-",
-                    "status": str(h.get("status_code", "-")),
-                    "server": h.get("server") or "-",
-                    "response_ms": "{}ms".format(ms) if ms is not None else "-",
-                })
+                rows.append(
+                    {
+                        "domain": probe["subdomain"],
+                        "grade": "-",
+                        "https": "Yes" if h.get("https") else "No",
+                        "hsts": "-",
+                        "csp": "-",
+                        "status": str(h.get("status_code", "-")),
+                        "server": h.get("server") or "-",
+                        "response_ms": f"{ms}ms" if ms is not None else "-",
+                    }
+                )
 
     # Sort: failures first, then by grade
     def _http_sort(r):
         if r["https"] == "No":
             return 0
         return GRADE_ORDER.get(r["grade"], 99)
+
     rows.sort(key=_http_sort)
     return rows
 
@@ -425,21 +530,23 @@ def _build_email_rows(result: AuditResult) -> list[dict]:
 
         spf_lookups = str(spf_data.get("lookup_count", "-")) if isinstance(spf_data, dict) else "-"
 
-        rows.append({
-            "domain": result.domain,
-            "grade": r.grade,
-            "spf": spf_status,
-            "dkim": dkim_status,
-            "dmarc": dmarc_status,
-            "spf_lookups": spf_lookups,
-        })
+        rows.append(
+            {
+                "domain": result.domain,
+                "grade": r.grade,
+                "spf": spf_status,
+                "dkim": dkim_status,
+                "dmarc": dmarc_status,
+                "spf_lookups": spf_lookups,
+            }
+        )
 
     rows.sort(key=lambda r: GRADE_ORDER.get(r["grade"], 99))
     return rows
 
 
 def _build_ports_rows(result: AuditResult) -> list[dict]:
-    rows = []
+    rows: list[dict] = []
     if "ports" not in result.results:
         return rows
 
@@ -456,24 +563,28 @@ def _build_ports_rows(result: AuditResult) -> list[dict]:
             dangerous = [p for p in open_ports if p["port"] in DANGEROUS_PORTS]
             grade = _grade_host_ports({p["port"] for p in open_ports})
             status = _port_status_text(len(open_ports), closed, filtered)
-            rows.append({
-                "domain": hr["host"],
-                "grade": grade,
-                "open_ports": ", ".join("{}/{}".format(p["port"], p["service"]) for p in open_ports) or "None",
-                "dangerous": ", ".join("{}/{}".format(p["port"], p["service"]) for p in dangerous) or "None",
-                "status": status,
-            })
+            rows.append(
+                {
+                    "domain": hr["host"],
+                    "grade": grade,
+                    "open_ports": ", ".join("{}/{}".format(p["port"], p["service"]) for p in open_ports) or "None",
+                    "dangerous": ", ".join("{}/{}".format(p["port"], p["service"]) for p in dangerous) or "None",
+                    "status": status,
+                }
+            )
     else:
         # Legacy single-host format (fallback)
         open_ports = raw.get("open_ports", [])
         dangerous = [p for p in open_ports if p["port"] in DANGEROUS_PORTS]
-        rows.append({
-            "domain": result.domain,
-            "grade": r.grade,
-            "open_ports": ", ".join("{}/{}".format(p["port"], p["service"]) for p in open_ports) or "None",
-            "dangerous": ", ".join("{}/{}".format(p["port"], p["service"]) for p in dangerous) or "None",
-            "status": "-",
-        })
+        rows.append(
+            {
+                "domain": result.domain,
+                "grade": r.grade,
+                "open_ports": ", ".join("{}/{}".format(p["port"], p["service"]) for p in open_ports) or "None",
+                "dangerous": ", ".join("{}/{}".format(p["port"], p["service"]) for p in dangerous) or "None",
+                "status": "-",
+            }
+        )
 
     rows.sort(key=lambda r: GRADE_ORDER.get(r["grade"], 99))
     return rows
@@ -484,17 +595,19 @@ def _build_whois_rows(result: AuditResult) -> list[dict]:
     if "whois" in result.results:
         r = result.results["whois"]
         raw = r.raw_data
-        rows.append({
-            "domain": result.domain,
-            "grade": r.grade,
-            "registrar": raw.get("registrar") or "-",
-            "days_left": _find_whois_days(r),
-        })
+        rows.append(
+            {
+                "domain": result.domain,
+                "grade": r.grade,
+                "registrar": raw.get("registrar") or "-",
+                "days_left": _find_whois_days(r),
+            }
+        )
     return rows
 
 
 def _build_tech_rows(result: AuditResult) -> list[dict]:
-    rows = []
+    rows: list[dict] = []
     if "tech" not in result.results:
         return rows
 
@@ -502,28 +615,33 @@ def _build_tech_rows(result: AuditResult) -> list[dict]:
     techs = raw.get("technologies", [])
 
     if not techs:
-        rows.append({
-            "domain": result.domain,
-            "category": "-",
-            "techs": "None detected",
-            "source": "-",
-        })
+        rows.append(
+            {
+                "domain": result.domain,
+                "category": "-",
+                "techs": "None detected",
+                "source": "-",
+            }
+        )
         return rows
 
     # Group by category using the scanner's categorization
     from domain_audit.scanners.tech_detect import _TECH_TO_CATEGORY
+
     groups: dict[str, list[dict[str, str]]] = {}
     for t in techs:
         cat = _TECH_TO_CATEGORY.get(t["name"].lower(), "Other")
         groups.setdefault(cat, []).append(t)
 
     for category, cat_techs in groups.items():
-        rows.append({
-            "domain": result.domain,
-            "category": category,
-            "techs": ", ".join(t["name"] for t in cat_techs),
-            "source": ", ".join(t["source"] for t in cat_techs),
-        })
+        rows.append(
+            {
+                "domain": result.domain,
+                "category": category,
+                "techs": ", ".join(t["name"] for t in cat_techs),
+                "source": ", ".join(t["source"] for t in cat_techs),
+            }
+        )
 
     return rows
 
@@ -531,6 +649,7 @@ def _build_tech_rows(result: AuditResult) -> list[dict]:
 # ═══════════════════════════════════════════════════════════════════
 #  HTML renderers
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _scan_status_badge(status: str) -> str:
     """Return HTML badge for scan status: success, failed, not scanned."""
@@ -542,7 +661,14 @@ def _scan_status_badge(status: str) -> str:
         return '<span style="color:#6b7280;font-weight:normal;font-size:12px;margin-left:10px;">scan: not run</span>'
 
 
-def _render_section(title: str, subtitle: str, rows: list[dict], columns: list[tuple[str, str, bool]], uid: str = "", scan_status: str = "success") -> str:
+def _render_section(
+    title: str,
+    subtitle: str,
+    rows: list[dict],
+    columns: list[tuple[str, str, bool]],
+    uid: str = "",
+    scan_status: str = "success",
+) -> str:
     """Render one category section with header + table."""
     badge = _scan_status_badge(scan_status)
 
@@ -565,7 +691,7 @@ def _render_section(title: str, subtitle: str, rows: list[dict], columns: list[t
         row_grade = row.get("grade", "-")
         grade_attr = f' data-{uid}-grade="{row_grade}"' if uid else ""
         cells = ""
-        for col_name, col_key, is_domain in columns:
+        for _col_name, col_key, is_domain in columns:
             val = _esc(str(row.get(col_key, "-")))
 
             if is_domain:
@@ -605,9 +731,14 @@ def _render_actions(result: AuditResult) -> str:
     domain = _esc(result.domain)
     sev_colors = {"CRITICAL": "#ef4444", "HIGH": "#f97316", "MEDIUM": "#eab308", "LOW": "#6b7280"}
     mod_labels = {
-        "ssl": "SSL/TLS", "dns": "DNS", "subdomains": "Subdomains",
-        "headers": "HTTP Headers", "whois": "WHOIS", "email": "Email Security",
-        "ports": "Ports", "tech": "Tech",
+        "ssl": "SSL/TLS",
+        "dns": "DNS",
+        "subdomains": "Subdomains",
+        "headers": "HTTP Headers",
+        "whois": "WHOIS",
+        "email": "Email Security",
+        "ports": "Ports",
+        "tech": "Tech",
     }
 
     items = ""
@@ -649,6 +780,7 @@ def _render_actions(result: AuditResult) -> str:
 # ═══════════════════════════════════════════════════════════════════
 #  Helpers
 # ═══════════════════════════════════════════════════════════════════
+
 
 def _find_finding(scan_result, label_contains: str) -> str:
     for f in scan_result.findings:

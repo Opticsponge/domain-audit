@@ -14,7 +14,7 @@ SECURITY_HEADERS = {
     "Strict-Transport-Security": {
         "label": "HSTS (Strict-Transport-Security)",
         "severity": "HIGH",
-        "fix": 'Add header: Strict-Transport-Security: max-age=31536000; includeSubDomains',
+        "fix": "Add header: Strict-Transport-Security: max-age=31536000; includeSubDomains",
     },
     "Content-Security-Policy": {
         "label": "Content-Security-Policy",
@@ -72,11 +72,13 @@ def _check_redirect_chain(domain: str) -> dict[str, Any]:
             headers={"User-Agent": "domain-audit/0.1"},
         )
 
-        chain.append({
-            "url": f"http://{domain}",
-            "status": str(resp.status_code),
-            "location": resp.headers.get("Location", "-"),
-        })
+        chain.append(
+            {
+                "url": f"http://{domain}",
+                "status": str(resp.status_code),
+                "location": resp.headers.get("Location", "-"),
+            }
+        )
 
         # Follow up to 10 redirects
         current_url = resp.headers.get("Location", "")
@@ -99,11 +101,13 @@ def _check_redirect_chain(domain: str) -> dict[str, Any]:
                     headers={"User-Agent": "domain-audit/0.1"},
                 )
                 location = resp.headers.get("Location", "")
-                chain.append({
-                    "url": current_url,
-                    "status": str(resp.status_code),
-                    "location": location or "(final)",
-                })
+                chain.append(
+                    {
+                        "url": current_url,
+                        "status": str(resp.status_code),
+                        "location": location or "(final)",
+                    }
+                )
 
                 # Check for HTTP > HTTPS > HTTP downgrade
                 if current_url.startswith("https://") and location.startswith("http://"):
@@ -115,11 +119,13 @@ def _check_redirect_chain(domain: str) -> dict[str, Any]:
                     break
 
             except Exception as e:
-                chain.append({
-                    "url": current_url,
-                    "status": f"Error: {e}",
-                    "location": "-",
-                })
+                chain.append(
+                    {
+                        "url": current_url,
+                        "status": f"Error: {e}",
+                        "location": "-",
+                    }
+                )
                 break
 
         # Check chain length
@@ -161,8 +167,8 @@ def _check_cookies(domain: str) -> dict[str, Any]:
         set_cookie_headers = []
         # requests stores all Set-Cookie in response.headers as a single joined string
         # Use raw headers from urllib3 for multiple Set-Cookie
-        if hasattr(resp.raw, '_original_response') and resp.raw._original_response:
-            raw_headers = resp.raw._original_response.headers.get_all('Set-Cookie') or []
+        if hasattr(resp.raw, "_original_response") and resp.raw._original_response:
+            raw_headers = resp.raw._original_response.headers.get_all("Set-Cookie") or []
             set_cookie_headers = [h for h in raw_headers if h]
 
         if not set_cookie_headers:
@@ -191,13 +197,15 @@ def _check_cookies(domain: str) -> dict[str, Any]:
             if not has_samesite:
                 cookie_issues.append("Missing SameSite flag")
 
-            cookies.append({
-                "name": name[:40],
-                "secure": has_secure,
-                "httponly": has_httponly,
-                "samesite": has_samesite,
-                "issues": cookie_issues,
-            })
+            cookies.append(
+                {
+                    "name": name[:40],
+                    "secure": has_secure,
+                    "httponly": has_httponly,
+                    "samesite": has_samesite,
+                    "issues": cookie_issues,
+                }
+            )
 
             if cookie_issues:
                 issues.extend(f"Cookie '{name}': {i}" for i in cookie_issues)
@@ -238,13 +246,15 @@ def scan(domain: str) -> ScanResult:
                 grade = "C" if meta["severity"] in ("HIGH",) else "B"
                 detail = f"{meta['label']} is missing"
 
-            findings.append({
-                "label": meta["label"],
-                "value": header_value or "Not set",
-                "grade": grade,
-                "detail": detail,
-                "fix": "" if found else meta["fix"],
-            })
+            findings.append(
+                {
+                    "label": meta["label"],
+                    "value": header_value or "Not set",
+                    "grade": grade,
+                    "detail": detail,
+                    "fix": "" if found else meta["fix"],
+                }
+            )
 
         # ── Redirect chain analysis ──
         redirect = _check_redirect_chain(domain)
@@ -258,35 +268,43 @@ def scan(domain: str) -> ScanResult:
             redirect_detail = f"Clean redirect chain ({redirect['hops']} hop(s), HTTP→HTTPS)"
 
         redirect_tests = []
-        redirect_tests.append({
-            "test": "Redirect Chain Length",
-            "pass": redirect["hops"] <= 3,
-            "result": f"{redirect['hops']} hop(s)" + (" — too many redirects" if redirect["hops"] > 3 else " — acceptable"),
-        })
+        redirect_tests.append(
+            {
+                "test": "Redirect Chain Length",
+                "pass": redirect["hops"] <= 3,
+                "result": f"{redirect['hops']} hop(s)"
+                + (" — too many redirects" if redirect["hops"] > 3 else " — acceptable"),
+            }
+        )
 
         has_http_to_https = any(
-            c["url"].startswith("http://") and c.get("location", "").startswith("https://")
-            for c in redirect["chain"]
+            c["url"].startswith("http://") and c.get("location", "").startswith("https://") for c in redirect["chain"]
         )
-        redirect_tests.append({
-            "test": "HTTP to HTTPS Redirect",
-            "pass": has_http_to_https,
-            "result": "HTTP redirects to HTTPS" if has_http_to_https else "No HTTP→HTTPS redirect found",
-        })
+        redirect_tests.append(
+            {
+                "test": "HTTP to HTTPS Redirect",
+                "pass": has_http_to_https,
+                "result": "HTTP redirects to HTTPS" if has_http_to_https else "No HTTP→HTTPS redirect found",
+            }
+        )
 
         has_loop = any("loop" in i.lower() for i in redirect["issues"])
-        redirect_tests.append({
-            "test": "Redirect Loop",
-            "pass": not has_loop,
-            "result": "No redirect loop detected" if not has_loop else "Redirect loop detected",
-        })
+        redirect_tests.append(
+            {
+                "test": "Redirect Loop",
+                "pass": not has_loop,
+                "result": "No redirect loop detected" if not has_loop else "Redirect loop detected",
+            }
+        )
 
         has_downgrade = any("downgrade" in i.lower() for i in redirect["issues"])
-        redirect_tests.append({
-            "test": "HTTPS Downgrade",
-            "pass": not has_downgrade,
-            "result": "No HTTPS downgrade" if not has_downgrade else "HTTPS redirects back to HTTP",
-        })
+        redirect_tests.append(
+            {
+                "test": "HTTPS Downgrade",
+                "pass": not has_downgrade,
+                "result": "No HTTPS downgrade" if not has_downgrade else "HTTPS redirects back to HTTP",
+            }
+        )
 
         # Build chain as parsed table
         chain_parsed = [
@@ -294,17 +312,19 @@ def scan(domain: str) -> ScanResult:
             for i, c in enumerate(redirect["chain"])
         ]
 
-        findings.append({
-            "label": "Redirect Chain",
-            "value": redirect["chain"],
-            "grade": redirect_grade,
-            "detail": redirect_detail,
-            "fix": "Fix redirect chain issues" if redirect["issues"] else "",
-            "parsed_record": chain_parsed,
-            "tests": redirect_tests,
-            "record_type": "Redirect Chain",
-            "domain": domain,
-        })
+        findings.append(
+            {
+                "label": "Redirect Chain",
+                "value": redirect["chain"],
+                "grade": redirect_grade,
+                "detail": redirect_detail,
+                "fix": "Fix redirect chain issues" if redirect["issues"] else "",
+                "parsed_record": chain_parsed,
+                "tests": redirect_tests,
+                "record_type": "Redirect Chain",
+                "domain": domain,
+            }
+        )
 
         # ── Cookie security ──
         cookie_check = _check_cookies(domain)
@@ -315,47 +335,61 @@ def scan(domain: str) -> ScanResult:
             insecure_count = sum(1 for c in cookie_check["cookies"] if c["issues"])
             if insecure_count == 0:
                 cookie_grade = "A"
-                cookie_detail = f"All {len(cookie_check['cookies'])} cookie(s) have Secure, HttpOnly, and SameSite flags"
+                cookie_detail = (
+                    f"All {len(cookie_check['cookies'])} cookie(s) have Secure, HttpOnly, and SameSite flags"
+                )
             else:
                 cookie_grade = "C"
                 cookie_detail = f"{insecure_count} of {len(cookie_check['cookies'])} cookie(s) missing security flags"
 
             cookie_tests = []
             for c in cookie_check["cookies"]:
-                cookie_tests.append({
-                    "test": f"Cookie '{c['name']}' Secure",
-                    "pass": c["secure"],
-                    "result": "Secure flag set" if c["secure"] else "Missing Secure flag — cookie sent over HTTP",
-                })
-                cookie_tests.append({
-                    "test": f"Cookie '{c['name']}' HttpOnly",
-                    "pass": c["httponly"],
-                    "result": "HttpOnly flag set" if c["httponly"] else "Missing HttpOnly — accessible via JavaScript",
-                })
-                cookie_tests.append({
-                    "test": f"Cookie '{c['name']}' SameSite",
-                    "pass": c["samesite"],
-                    "result": "SameSite flag set" if c["samesite"] else "Missing SameSite — vulnerable to CSRF",
-                })
+                cookie_tests.append(
+                    {
+                        "test": f"Cookie '{c['name']}' Secure",
+                        "pass": c["secure"],
+                        "result": "Secure flag set" if c["secure"] else "Missing Secure flag — cookie sent over HTTP",
+                    }
+                )
+                cookie_tests.append(
+                    {
+                        "test": f"Cookie '{c['name']}' HttpOnly",
+                        "pass": c["httponly"],
+                        "result": "HttpOnly flag set"
+                        if c["httponly"]
+                        else "Missing HttpOnly — accessible via JavaScript",
+                    }
+                )
+                cookie_tests.append(
+                    {
+                        "test": f"Cookie '{c['name']}' SameSite",
+                        "pass": c["samesite"],
+                        "result": "SameSite flag set" if c["samesite"] else "Missing SameSite — vulnerable to CSRF",
+                    }
+                )
 
-            findings.append({
-                "label": "Cookie Security",
-                "value": cookie_check["cookies"],
-                "grade": cookie_grade,
-                "detail": cookie_detail,
-                "fix": "Add Secure, HttpOnly, and SameSite flags to all cookies" if insecure_count > 0 else "",
-                "tests": cookie_tests,
-                "record_type": "Cookie Security",
-                "domain": domain,
-            })
+            findings.append(
+                {
+                    "label": "Cookie Security",
+                    "value": cookie_check["cookies"],
+                    "grade": cookie_grade,
+                    "detail": cookie_detail,
+                    "fix": "Add Secure, HttpOnly, and SameSite flags to all cookies" if insecure_count > 0 else "",
+                    "tests": cookie_tests,
+                    "record_type": "Cookie Security",
+                    "domain": domain,
+                }
+            )
         else:
-            findings.append({
-                "label": "Cookie Security",
-                "value": "No cookies set",
-                "grade": "-",
-                "detail": "No cookies set by the server",
-                "fix": "",
-            })
+            findings.append(
+                {
+                    "label": "Cookie Security",
+                    "value": "No cookies set",
+                    "grade": "-",
+                    "detail": "No cookies set by the server",
+                    "fix": "",
+                }
+            )
 
         # ── Calculate module grade ──
         total = len(SECURITY_HEADERS)
@@ -391,13 +425,15 @@ def scan(domain: str) -> ScanResult:
             module="headers",
             status="error",
             grade="?",
-            findings=[{
-                "label": "HTTP Security Headers",
-                "value": f"Error: {safe_error(exc)}",
-                "grade": "?",
-                "detail": f"Could not fetch headers: {safe_error(exc)}",
-                "fix": "Verify the domain responds to HTTPS requests",
-            }],
+            findings=[
+                {
+                    "label": "HTTP Security Headers",
+                    "value": f"Error: {safe_error(exc)}",
+                    "grade": "?",
+                    "detail": f"Could not fetch headers: {safe_error(exc)}",
+                    "fix": "Verify the domain responds to HTTPS requests",
+                }
+            ],
             raw_data={"error": safe_error(exc)},
             elapsed=time.time() - start,
             retries=retries,

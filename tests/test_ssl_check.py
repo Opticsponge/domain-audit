@@ -1,6 +1,6 @@
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
-from datetime import datetime, timezone, timedelta
-import ssl as _ssl
+
 from domain_audit.scanners.ssl_check import scan
 
 

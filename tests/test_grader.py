@@ -77,19 +77,27 @@ class TestComputeOverallGrade:
 class TestGenerateActionItems:
     def test_no_items_for_all_a(self):
         results = {
-            "ssl": _make_result("ssl", "A", findings=[
-                {"label": "Cert valid", "grade": "A", "detail": "Good", "fix": ""},
-            ]),
+            "ssl": _make_result(
+                "ssl",
+                "A",
+                findings=[
+                    {"label": "Cert valid", "grade": "A", "detail": "Good", "fix": ""},
+                ],
+            ),
         }
         items = generate_action_items(results)
         assert items == []
 
     def test_generates_items_for_failures(self):
         results = {
-            "email": _make_result("email", "F", findings=[
-                {"label": "SPF record", "grade": "F", "detail": "Missing", "fix": "Add SPF"},
-                {"label": "DMARC", "grade": "F", "detail": "Missing", "fix": "Add DMARC"},
-            ]),
+            "email": _make_result(
+                "email",
+                "F",
+                findings=[
+                    {"label": "SPF record", "grade": "F", "detail": "Missing", "fix": "Add SPF"},
+                    {"label": "DMARC", "grade": "F", "detail": "Missing", "fix": "Add DMARC"},
+                ],
+            ),
         }
         items = generate_action_items(results)
         assert len(items) == 2
@@ -98,12 +106,20 @@ class TestGenerateActionItems:
 
     def test_sorted_by_severity(self):
         results = {
-            "headers": _make_result("headers", "C", findings=[
-                {"label": "CSP", "grade": "C", "detail": "Missing", "fix": "Add CSP"},
-            ]),
-            "ssl": _make_result("ssl", "F", findings=[
-                {"label": "Expired", "grade": "F", "detail": "Expired", "fix": "Renew"},
-            ]),
+            "headers": _make_result(
+                "headers",
+                "C",
+                findings=[
+                    {"label": "CSP", "grade": "C", "detail": "Missing", "fix": "Add CSP"},
+                ],
+            ),
+            "ssl": _make_result(
+                "ssl",
+                "F",
+                findings=[
+                    {"label": "Expired", "grade": "F", "detail": "Expired", "fix": "Renew"},
+                ],
+            ),
         }
         items = generate_action_items(results)
         assert items[0]["severity"] == "CRITICAL"
@@ -111,29 +127,45 @@ class TestGenerateActionItems:
 
     def test_location_from_domain_field(self):
         results = {
-            "headers": _make_result("headers", "C", findings=[
-                {"label": "CSP", "grade": "C", "detail": "Missing", "fix": "Add CSP",
-                 "domain": "sub.example.com"},
-            ]),
+            "headers": _make_result(
+                "headers",
+                "C",
+                findings=[
+                    {"label": "CSP", "grade": "C", "detail": "Missing", "fix": "Add CSP", "domain": "sub.example.com"},
+                ],
+            ),
         }
         items = generate_action_items(results)
         assert items[0]["location"] == "sub.example.com"
 
     def test_location_from_host_field(self):
         results = {
-            "ports": _make_result("ports", "F", findings=[
-                {"label": "Dangerous ports", "grade": "F", "detail": "3306 open",
-                 "fix": "Close port", "host": "db.example.com"},
-            ]),
+            "ports": _make_result(
+                "ports",
+                "F",
+                findings=[
+                    {
+                        "label": "Dangerous ports",
+                        "grade": "F",
+                        "detail": "3306 open",
+                        "fix": "Close port",
+                        "host": "db.example.com",
+                    },
+                ],
+            ),
         }
         items = generate_action_items(results)
         assert items[0]["location"] == "db.example.com"
 
     def test_no_location_when_absent(self):
         results = {
-            "ssl": _make_result("ssl", "F", findings=[
-                {"label": "Expired", "grade": "F", "detail": "Expired", "fix": "Renew"},
-            ]),
+            "ssl": _make_result(
+                "ssl",
+                "F",
+                findings=[
+                    {"label": "Expired", "grade": "F", "detail": "Expired", "fix": "Renew"},
+                ],
+            ),
         }
         items = generate_action_items(results)
         assert "location" not in items[0]

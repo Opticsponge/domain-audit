@@ -1,5 +1,6 @@
 from unittest.mock import patch
-from domain_audit.scanners.email_security import scan, _check_spf, _check_dmarc, _check_dkim, _parse_spf, _parse_dmarc
+
+from domain_audit.scanners.email_security import _check_dkim, _check_dmarc, _check_spf, _parse_dmarc, _parse_spf, scan
 
 
 class TestParseSPF:
@@ -84,6 +85,7 @@ class TestCheckDKIM:
             if "google._domainkey" in name:
                 return ["v=DKIM1; k=rsa; p=MIGfMA0..."]
             return []
+
         mock_resolve.side_effect = resolver
         result = _check_dkim("example.com")
         assert result["grade"] == "A"
@@ -109,8 +111,18 @@ class TestEmailScan:
                 return []
             else:
                 return ["v=spf1 include:_spf.google.com -all"]
+
         mock_resolve.side_effect = resolver
-        mock_mx.return_value = {"mx_records": [{"priority": 10, "host": "mx.example.com"}], "smtp_checks": [], "is_free_provider": False, "is_disposable": False, "provider_name": None, "tests": [{"test": "MX Record Exists", "pass": True, "result": "Found 1 MX record(s)"}], "parsed": [], "grade": "A"}
+        mock_mx.return_value = {
+            "mx_records": [{"priority": 10, "host": "mx.example.com"}],
+            "smtp_checks": [],
+            "is_free_provider": False,
+            "is_disposable": False,
+            "provider_name": None,
+            "tests": [{"test": "MX Record Exists", "pass": True, "result": "Found 1 MX record(s)"}],
+            "parsed": [],
+            "grade": "A",
+        }
 
         result = scan("example.com")
         assert result.module == "email"

@@ -1,10 +1,11 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 from domain_audit.scanners.subdomains import (
-    scan,
-    _discover_subdomains,
     _build_dns_table,
-    _build_ssl_table,
     _build_http_table,
+    _build_ssl_table,
+    _discover_subdomains,
+    scan,
 )
 
 
@@ -31,13 +32,21 @@ class TestBuildTables:
             "subdomain": sub,
             "dns": {"a": ["1.2.3.4"], "aaaa": [], "cname": []},
             "ssl": {
-                "has_ssl": True, "valid": True, "issuer": "Test CA",
-                "expires": "Jan 01 00:00:00 2027 GMT", "days_left": 200,
-                "protocol": "TLSv1.3", "error": None,
+                "has_ssl": True,
+                "valid": True,
+                "issuer": "Test CA",
+                "expires": "Jan 01 00:00:00 2027 GMT",
+                "days_left": 200,
+                "protocol": "TLSv1.3",
+                "error": None,
             },
             "http": {
-                "reachable": True, "status_code": 200, "https": True,
-                "server": "nginx", "redirect": None, "response_ms": 120,
+                "reachable": True,
+                "status_code": 200,
+                "https": True,
+                "server": "nginx",
+                "redirect": None,
+                "response_ms": 120,
             },
         }
 
@@ -80,8 +89,23 @@ class TestSubdomainScan:
         mock_probe.return_value = {
             "subdomain": "sub1.example.com",
             "dns": {"a": ["1.2.3.4"], "aaaa": [], "cname": []},
-            "ssl": {"has_ssl": True, "valid": True, "issuer": "CA", "expires": "x", "days_left": 100, "protocol": "TLSv1.3", "error": None},
-            "http": {"reachable": True, "status_code": 200, "https": True, "server": "nginx", "redirect": None, "response_ms": 50},
+            "ssl": {
+                "has_ssl": True,
+                "valid": True,
+                "issuer": "CA",
+                "expires": "x",
+                "days_left": 100,
+                "protocol": "TLSv1.3",
+                "error": None,
+            },
+            "http": {
+                "reachable": True,
+                "status_code": 200,
+                "https": True,
+                "server": "nginx",
+                "redirect": None,
+                "response_ms": 50,
+            },
         }
 
         result = scan("example.com", deep=True)

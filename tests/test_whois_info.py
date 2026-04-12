@@ -1,5 +1,6 @@
-from unittest.mock import patch, MagicMock
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock, patch
+
 from domain_audit.scanners.whois_info import scan
 
 

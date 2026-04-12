@@ -4,8 +4,8 @@ import functools
 import random
 import socket
 import time
-from dataclasses import dataclass, field
-from typing import Any, Callable, Type
+from dataclasses import dataclass
+from typing import Any, Callable
 
 
 @dataclass
@@ -13,7 +13,7 @@ class RetryConfig:
     max_retries: int = 3
     base_delay: float = 1.0
     backoff_factor: float = 2.0
-    retry_on: tuple[Type[Exception], ...] = (
+    retry_on: tuple[type[Exception], ...] = (
         TimeoutError,
         ConnectionError,
         ConnectionResetError,
@@ -40,13 +40,13 @@ def with_retry(config: RetryConfig | None = None):
                 except config.retry_on as exc:
                     last_exception = exc
                     if attempt < config.max_retries:
-                        delay = config.base_delay * (config.backoff_factor ** attempt)
+                        delay = config.base_delay * (config.backoff_factor**attempt)
                         jitter = random.uniform(0, delay * 0.25)
                         time.sleep(delay + jitter)
 
-            raise last_exception
+            raise last_exception  # type: ignore[misc]
 
-        wrapper._retry_config = config
+        wrapper._retry_config = config  # type: ignore[attr-defined]
         return wrapper
 
     return decorator

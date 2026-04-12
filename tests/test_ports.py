@@ -1,4 +1,5 @@
 from unittest.mock import patch
+
 from domain_audit.scanners.ports import scan
 
 
@@ -26,6 +27,7 @@ class TestPortsScan:
     @patch("domain_audit.scanners.ports.socket.gethostbyname")
     def test_dns_failure(self, mock_dns):
         import socket
+
         mock_dns.side_effect = socket.gaierror("no resolution")
         result = scan("nonexistent.invalid")
         assert result.status == "error"

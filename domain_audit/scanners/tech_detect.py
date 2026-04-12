@@ -2,9 +2,15 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 import time
 from pathlib import Path
-from typing import Any, TypedDict, NotRequired
+from typing import Any, TypedDict
+
+if sys.version_info >= (3, 11):
+    from typing import NotRequired
+else:
+    from typing_extensions import NotRequired
 
 import requests
 
@@ -20,11 +26,13 @@ _retry = RetryConfig(max_retries=2, timeout_per_attempt=10.0)
 #  Custom pattern types (JSON/MCP-friendly)
 # ═══════════════════════════════════════════════════════════════════
 
+
 class TechPattern(TypedDict):
     """A single custom detection pattern."""
-    pattern: str                    # substring (cdn/headers/paths/dns) or regex (asset/inline)
-    name: str                       # technology name, e.g. "MyInternalCDN"
-    category: NotRequired[str]      # display category; defaults to "Other"
+
+    pattern: str  # substring (cdn/headers/paths/dns) or regex (asset/inline)
+    name: str  # technology name, e.g. "MyInternalCDN"
+    category: NotRequired[str]  # display category; defaults to "Other"
 
 
 class TechPatterns(TypedDict, total=False):
@@ -59,6 +67,7 @@ class TechPatterns(TypedDict, total=False):
             ]
         }
     """
+
     cdn_domains: list[TechPattern]
     asset_paths: list[TechPattern]
     inline_js: list[TechPattern]
@@ -80,16 +89,12 @@ def _validate_custom_patterns(patterns: dict) -> None:
             raise ValueError(f"tech_patterns[{key!r}] must be a list")
         for i, entry in enumerate(patterns[key]):
             if "pattern" not in entry or "name" not in entry:
-                raise ValueError(
-                    f"tech_patterns[{key!r}][{i}] must have 'pattern' and 'name' keys"
-                )
+                raise ValueError(f"tech_patterns[{key!r}][{i}] must have 'pattern' and 'name' keys")
             if key in ("asset_paths", "inline_js"):
                 try:
                     re.compile(entry["pattern"])
                 except re.error as e:
-                    raise ValueError(
-                        f"tech_patterns[{key!r}][{i}] invalid regex: {e}"
-                    ) from e
+                    raise ValueError(f"tech_patterns[{key!r}][{i}] invalid regex: {e}") from e
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -146,7 +151,7 @@ _CATEGORY_MAP, _TECH_TO_CATEGORY = _load_categories()
 # ═══════════════════════════════════════════════════════════════════
 
 _SRC_RE = re.compile(
-    r'''<(?:script|link|img)[^>]+(?:src|href)\s*=\s*["\']([^"\']+)["\']''',
+    r"""<(?:script|link|img)[^>]+(?:src|href)\s*=\s*["\']([^"\']+)["\']""",
     re.IGNORECASE,
 )
 
@@ -193,8 +198,8 @@ def _detect_from_dns(
     txt_patterns: list[tuple[str, str]],
     cname_patterns: list[tuple[str, str]],
 ) -> tuple[list[dict[str, str]], dict[str, Any]]:
-    import dns.resolver
     import dns.exception
+    import dns.resolver
 
     hits: list[dict[str, str]] = []
     seen: set[str] = set()
@@ -253,6 +258,7 @@ def _trunc(url: str, max_len: int = 120) -> str:
 #  Pattern merging
 # ═══════════════════════════════════════════════════════════════════
 
+
 class _EffectivePatterns:
     __slots__ = ("cdn", "asset", "inline", "headers", "paths", "dns_txt", "dns_cname", "extra_categories")
 
@@ -279,19 +285,26 @@ def _merge_patterns(custom_patterns: dict | None) -> _EffectivePatterns:
             eff.extra_categories[name.lower()] = entry["category"]
 
     for p in custom_patterns.get("cdn_domains", []):
-        eff.cdn.append((p["pattern"], p["name"])); _add(p["name"], p)
+        eff.cdn.append((p["pattern"], p["name"]))
+        _add(p["name"], p)
     for p in custom_patterns.get("asset_paths", []):
-        eff.asset.append((p["pattern"], p["name"])); _add(p["name"], p)
+        eff.asset.append((p["pattern"], p["name"]))
+        _add(p["name"], p)
     for p in custom_patterns.get("inline_js", []):
-        eff.inline.append((p["pattern"], p["name"])); _add(p["name"], p)
+        eff.inline.append((p["pattern"], p["name"]))
+        _add(p["name"], p)
     for p in custom_patterns.get("headers", []):
-        eff.headers[p["pattern"]] = p["name"] or None; _add(p["name"], p)
+        eff.headers[p["pattern"]] = p["name"] or None
+        _add(p["name"], p)
     for p in custom_patterns.get("paths", []):
-        eff.paths[p["pattern"]] = p["name"]; _add(p["name"], p)
+        eff.paths[p["pattern"]] = p["name"]
+        _add(p["name"], p)
     for p in custom_patterns.get("dns_txt", []):
-        eff.dns_txt.append((p["pattern"], p["name"])); _add(p["name"], p)
+        eff.dns_txt.append((p["pattern"], p["name"]))
+        _add(p["name"], p)
     for p in custom_patterns.get("dns_cname", []):
-        eff.dns_cname.append((p["pattern"], p["name"])); _add(p["name"], p)
+        eff.dns_cname.append((p["pattern"], p["name"]))
+        _add(p["name"], p)
 
     return eff
 
@@ -299,6 +312,7 @@ def _merge_patterns(custom_patterns: dict | None) -> _EffectivePatterns:
 # ═══════════════════════════════════════════════════════════════════
 #  Main scan
 # ═══════════════════════════════════════════════════════════════════
+
 
 @with_retry(config=_retry)
 def _fetch_page(domain: str) -> tuple[dict[str, str], str]:
@@ -345,12 +359,20 @@ def scan(domain: str, custom_patterns: dict | None = None) -> ScanResult:
         for pattern, tag_type in META_PATTERNS.items():
             match = re.search(pattern, body, re.IGNORECASE)
             if match:
-                technologies.append({"name": match.group(1).strip(), "source": f"Meta tag: {tag_type}", "detail": match.group(1).strip()})
+                technologies.append(
+                    {
+                        "name": match.group(1).strip(),
+                        "source": f"Meta tag: {tag_type}",
+                        "detail": match.group(1).strip(),
+                    }
+                )
 
         # 4. URL paths in body
         for path, tech_name in eff.paths.items():
-            if path in body and not any(t["name"] == tech_name for t in technologies):
-                technologies.append({"name": tech_name, "source": f"URL pattern: {path}", "detail": f"Found {path} reference in page"})
+            if tech_name and path in body and not any(t["name"] == tech_name for t in technologies):
+                technologies.append(
+                    {"name": tech_name, "source": f"URL pattern: {path}", "detail": f"Found {path} reference in page"}
+                )
 
         # 5. Asset URL fingerprinting
         asset_urls = _extract_asset_urls(body)
@@ -378,27 +400,46 @@ def scan(domain: str, custom_patterns: dict | None = None) -> ScanResult:
 
         for category, techs in categories.items():
             names = ", ".join(t["name"] for t in techs)
-            findings.append({"label": category, "value": [t["name"] for t in techs], "grade": "-", "detail": names, "fix": ""})
+            findings.append(
+                {"label": category, "value": [t["name"] for t in techs], "grade": "-", "detail": names, "fix": ""}
+            )
 
         if not findings:
-            findings.append({
-                "label": "Detected technologies",
-                "value": "None detected",
-                "grade": "-",
-                "detail": f"No technologies detected (scanned {len(asset_urls)} asset URLs)",
-                "fix": "",
-            })
+            findings.append(
+                {
+                    "label": "Detected technologies",
+                    "value": "None detected",
+                    "grade": "-",
+                    "detail": f"No technologies detected (scanned {len(asset_urls)} asset URLs)",
+                    "fix": "",
+                }
+            )
 
         return ScanResult(
-            module="tech", status="pass", grade="-",
-            findings=findings, raw_data=raw_data,
-            elapsed=time.time() - start, retries=0,
+            module="tech",
+            status="pass",
+            grade="-",
+            findings=findings,
+            raw_data=raw_data,
+            elapsed=time.time() - start,
+            retries=0,
         )
 
     except Exception as exc:
         return ScanResult(
-            module="tech", status="error", grade="?",
-            findings=[{"label": "Technology detection", "value": f"Error: {safe_error(exc)}", "grade": "?", "detail": f"Could not detect technologies: {safe_error(exc)}", "fix": ""}],
+            module="tech",
+            status="error",
+            grade="?",
+            findings=[
+                {
+                    "label": "Technology detection",
+                    "value": f"Error: {safe_error(exc)}",
+                    "grade": "?",
+                    "detail": f"Could not detect technologies: {safe_error(exc)}",
+                    "fix": "",
+                }
+            ],
             raw_data={"error": safe_error(exc)},
-            elapsed=time.time() - start, retries=0,
+            elapsed=time.time() - start,
+            retries=0,
         )

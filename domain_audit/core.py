@@ -23,10 +23,10 @@ _MODULE_LABELS = {
 
 # Status icons
 _STATUS_ICON = {
-    "pass": "\u2705",    # green check
-    "warn": "\u26a0\ufe0f",    # warning
-    "fail": "\u274c",    # red X
-    "error": "\u274c",   # red X
+    "pass": "\u2705",  # green check
+    "warn": "\u26a0\ufe0f",  # warning
+    "fail": "\u274c",  # red X
+    "error": "\u274c",  # red X
 }
 
 
@@ -52,14 +52,13 @@ class AuditResult:
             "domain": self.domain,
             "overall_grade": self.overall_grade,
             "elapsed_seconds": round(self.elapsed, 2),
-            "modules": {
-                name: result.to_dict() for name, result in self.results.items()
-            },
+            "modules": {name: result.to_dict() for name, result in self.results.items()},
             "action_items": self.action_items,
         }
 
     def to_json(self, path: str) -> None:
         import json
+
         with open(path, "w") as f:
             json.dump(self.to_dict(), f, indent=2, default=str)
 
@@ -69,19 +68,22 @@ class AuditResult:
 
     def to_csv_string(self) -> str:
         import csv
+
         buf = io.StringIO()
         writer = csv.writer(buf)
         writer.writerow(["module", "grade", "status", "finding", "detail", "fix"])
         for name, result in self.results.items():
             for finding in result.findings:
-                writer.writerow([
-                    name,
-                    finding.get("grade", "-"),
-                    result.status,
-                    finding.get("label", ""),
-                    finding.get("detail", ""),
-                    finding.get("fix", ""),
-                ])
+                writer.writerow(
+                    [
+                        name,
+                        finding.get("grade", "-"),
+                        result.status,
+                        finding.get("label", ""),
+                        finding.get("detail", ""),
+                        finding.get("fix", ""),
+                    ]
+                )
         return buf.getvalue()
 
     def __repr__(self) -> str:
@@ -92,9 +94,11 @@ class AuditResult:
 #  Progress tracking
 # ═══════════════════════════════════════════════════════════════════
 
+
 def _is_colab() -> bool:
     try:
         from google.colab import output  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -102,14 +106,15 @@ def _is_colab() -> bool:
 
 def _make_progress_colab(domain: str, scanner_names: list[str]) -> Callable[[str, ScanResult | None], None]:
     """Return a callback that updates a live HTML widget in Colab."""
-    from IPython.display import display as ipy_display, HTML
     import html as html_mod
+
+    from IPython.display import HTML
+    from IPython.display import display as ipy_display
 
     state: dict[str, str] = {name: "pending" for name in scanner_names}
     results_map: dict[str, ScanResult] = {}
 
     # Create an output handle we can update
-    from IPython.display import display as ipy_display
     import IPython.display
 
     handle = ipy_display(HTML(""), display_id=True)
@@ -185,6 +190,7 @@ def _make_progress_colab(domain: str, scanner_names: list[str]) -> Callable[[str
 def _make_progress_terminal(domain: str, scanner_names: list[str]) -> Callable[[str, ScanResult | None], None]:
     """Return a callback that prints scanner progress to the terminal."""
     from rich.console import Console
+
     console = Console()
     total = len(scanner_names)
     done_count = [0]  # mutable counter for closure
@@ -221,6 +227,7 @@ def _make_progress_terminal(domain: str, scanner_names: list[str]) -> Callable[[
 #  Main audit
 # ═══════════════════════════════════════════════════════════════════
 
+
 def audit(
     domain: str,
     only: list[str] | None = None,
@@ -240,10 +247,7 @@ def audit(
     start = time.time()
 
     # Select scanners
-    if only:
-        scanner_map = {k: v for k, v in SCANNERS.items() if k in only}
-    else:
-        scanner_map = SCANNERS
+    scanner_map = {k: v for k, v in SCANNERS.items() if k in only} if only else SCANNERS
 
     scanner_names = list(scanner_map.keys())
     results: dict[str, ScanResult] = {}
@@ -264,7 +268,7 @@ def audit(
         if progress_cb:
             progress_cb("subdomains", None)
         try:
-            sub_result = scanner_map["subdomains"](domain, deep=deep_subdomains)
+            sub_result = scanner_map["subdomains"](domain, deep=deep_subdomains)  # type: ignore[call-arg]
             results["subdomains"] = sub_result
             discovered_subdomains = sub_result.raw_data.get("all_subdomains", [])
         except Exception as exc:
@@ -272,13 +276,15 @@ def audit(
                 module="subdomains",
                 status="error",
                 grade="?",
-                findings=[{
-                    "label": "subdomains scanner",
-                    "value": f"Unexpected error: {safe_error(exc)}",
-                    "grade": "?",
-                    "detail": safe_error(exc),
-                    "fix": "",
-                }],
+                findings=[
+                    {
+                        "label": "subdomains scanner",
+                        "value": f"Unexpected error: {safe_error(exc)}",
+                        "grade": "?",
+                        "detail": safe_error(exc),
+                        "fix": "",
+                    }
+                ],
                 raw_data={"error": safe_error(exc)},
             )
         if progress_cb:
@@ -300,8 +306,7 @@ def audit(
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_name = {
-            executor.submit(_make_scanner_call, name, scan_func, domain): name
-            for name, scan_func in remaining.items()
+            executor.submit(_make_scanner_call, name, scan_func, domain): name for name, scan_func in remaining.items()
         }
 
         for future in as_completed(future_to_name):
@@ -316,13 +321,15 @@ def audit(
                     module=name,
                     status="error",
                     grade="?",
-                    findings=[{
-                        "label": f"{name} scanner",
-                        "value": f"Unexpected error: {safe_error(exc)}",
-                        "grade": "?",
-                        "detail": safe_error(exc),
-                        "fix": "",
-                    }],
+                    findings=[
+                        {
+                            "label": f"{name} scanner",
+                            "value": f"Unexpected error: {safe_error(exc)}",
+                            "grade": "?",
+                            "detail": safe_error(exc),
+                            "fix": "",
+                        }
+                    ],
                     raw_data={"error": safe_error(exc)},
                 )
                 results[name] = err_result
@@ -347,6 +354,7 @@ def audit(
             pass  # Colab progress widget already shows completion
         else:
             from rich.console import Console
+
             console = Console()
             gc = {"A": "green", "B": "yellow", "C": "dark_orange", "F": "red"}.get(overall_grade, "white")
             console.print()

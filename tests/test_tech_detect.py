@@ -1,4 +1,5 @@
 from unittest.mock import patch
+
 from domain_audit.scanners.tech_detect import scan
 
 

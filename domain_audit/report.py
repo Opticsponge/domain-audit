@@ -11,6 +11,7 @@ def _esc(text: str) -> str:
     """HTML-escape user-controlled strings to prevent XSS."""
     return html_mod.escape(str(text)) if text else ""
 
+
 GRADE_COLORS = {
     "A": "green",
     "B": "yellow",
@@ -69,6 +70,7 @@ MODULE_ORDER = ["subdomains", "ssl", "dns", "headers", "whois", "email", "ports"
 def _is_colab() -> bool:
     try:
         from google.colab import output  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -85,9 +87,9 @@ def display(result: AuditResult) -> None:
 #  TERMINAL (Rich)
 # ═══════════════════════════════════════════════════════════════════
 
+
 def _display_terminal(result: AuditResult) -> None:
     from rich.console import Console
-    from rich.text import Text
 
     console = Console()
     domain = result.domain
@@ -96,7 +98,7 @@ def _display_terminal(result: AuditResult) -> None:
 
     # ── Header ──
     console.print()
-    console.print(f"  [bold white on blue]  DOMAIN AUDIT  [/]")
+    console.print("  [bold white on blue]  DOMAIN AUDIT  [/]")
     console.print()
     console.print(f"  [bold]{domain}[/bold]  [bold {gc}]{grade}[/bold {gc}]  [dim]{result.elapsed:.1f}s[/dim]")
     console.print()
@@ -124,7 +126,9 @@ def _display_terminal(result: AuditResult) -> None:
             if non_table:
                 color = GRADE_COLORS.get(r.grade, "white")
                 label = MODULE_LABELS.get(mod, mod)
-                console.print(f"  [bold {color}]{r.grade}[/bold {color}]  [bold]{domain}[/bold] [dim]>[/dim] [bold]{label}[/bold]")
+                console.print(
+                    f"  [bold {color}]{r.grade}[/bold {color}]  [bold]{domain}[/bold] [dim]>[/dim] [bold]{label}[/bold]"
+                )
                 console.print(f"  [dim]{'─' * 60}[/dim]")
                 for f in non_table:
                     console.print(f"     [dim]{f.get('detail', '')}[/dim]")
@@ -132,6 +136,7 @@ def _display_terminal(result: AuditResult) -> None:
                     if sub_list:
                         # Show in columns
                         from rich.columns import Columns
+
                         styled = [f"[cyan]{s}[/cyan]" for s in sub_list]
                         console.print(Columns(styled, padding=(0, 2), column_first=True))
                 console.print()
@@ -142,7 +147,9 @@ def _display_terminal(result: AuditResult) -> None:
         label = MODULE_LABELS.get(mod, mod)
 
         # Module header: always includes domain
-        console.print(f"  [bold {color}]{r.grade}[/bold {color}]  [bold]{domain}[/bold] [dim]>[/dim] [bold]{label}[/bold]")
+        console.print(
+            f"  [bold {color}]{r.grade}[/bold {color}]  [bold]{domain}[/bold] [dim]>[/dim] [bold]{label}[/bold]"
+        )
         console.print(f"  [dim]{'─' * 60}[/dim]")
 
         # Check if findings have detailed record/test data (email security style)
@@ -157,14 +164,16 @@ def _display_terminal(result: AuditResult) -> None:
         table_key = MODULE_TO_TABLE.get(mod)
         if table_key and table_key in sub_tables:
             sub_finding = sub_tables[table_key]
-            console.print(f"     [bold]Subdomains[/bold]")
+            console.print("     [bold]Subdomains[/bold]")
             _display_terminal_simple_findings(console, [sub_finding])
 
         console.print()
 
     # ── Action Items ──
     if result.action_items:
-        console.print(f"  [bold white on red]  ACTION ITEMS  [/]  [bold]{domain}[/bold]  [dim]{len(result.action_items)} issue(s)[/dim]")
+        console.print(
+            f"  [bold white on red]  ACTION ITEMS  [/]  [bold]{domain}[/bold]  [dim]{len(result.action_items)} issue(s)[/dim]"
+        )
         console.print(f"  [dim]{'─' * 60}[/dim]")
         console.print()
 
@@ -252,8 +261,12 @@ def _display_terminal_simple_findings(console, findings: list) -> None:
             for row in table_data:
                 gc = GRADE_COLORS.get(row["grade"], "dim")
                 t.add_row(
-                    row["subdomain"], row["ip"], row["valid"],
-                    row["issuer"], row["days_left"], row["protocol"],
+                    row["subdomain"],
+                    row["ip"],
+                    row["valid"],
+                    row["issuer"],
+                    row["days_left"],
+                    row["protocol"],
                     f"[{gc}]{row['grade']}[/{gc}]",
                 )
             console.print(t)
@@ -271,9 +284,13 @@ def _display_terminal_simple_findings(console, findings: list) -> None:
                 https_style = "green" if row["https"] == "Yes" else "red" if row["reachable"] == "Yes" else "dim"
                 ms = row.get("response_ms", "-")
                 t.add_row(
-                    row["subdomain"], row["reachable"],
+                    row["subdomain"],
+                    row["reachable"],
                     f"[{https_style}]{row['https']}[/{https_style}]",
-                    row["status"], row["server"], ms, row["redirect"],
+                    row["status"],
+                    row["server"],
+                    ms,
+                    row["redirect"],
                 )
             console.print(t)
 
@@ -337,6 +354,7 @@ def _display_terminal_detailed_findings(console, findings: list, domain: str, mo
 #  COLAB (HTML)
 # ═══════════════════════════════════════════════════════════════════
 
+
 def _colab_data_table(table_type: str, table_data: list[dict]) -> str:
     """Generate HTML table for subdomain data (DNS, SSL, HTTP)."""
     ths = "padding:6px 8px;text-align:left;color:#8b949e;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;"
@@ -352,10 +370,10 @@ def _colab_data_table(table_type: str, table_data: list[dict]) -> str:
             </tr>"""
         for row in table_data:
             html += f"""<tr>
-                <td style="{tds}color:#58a6ff;font-family:monospace;">{_esc(row['subdomain'])}</td>
-                <td style="{tds}font-family:monospace;">{row['a_records']}</td>
-                <td style="{tds}font-family:monospace;">{row['aaaa_records']}</td>
-                <td style="{tds}font-family:monospace;">{row['cname']}</td>
+                <td style="{tds}color:#58a6ff;font-family:monospace;">{_esc(row["subdomain"])}</td>
+                <td style="{tds}font-family:monospace;">{row["a_records"]}</td>
+                <td style="{tds}font-family:monospace;">{row["aaaa_records"]}</td>
+                <td style="{tds}font-family:monospace;">{row["cname"]}</td>
             </tr>"""
         html += "</table>"
         return html
@@ -375,13 +393,13 @@ def _colab_data_table(table_type: str, table_data: list[dict]) -> str:
             gc = GRADE_COLORS_HTML.get(row.get("grade", "-"), "#6b7280")
             valid_color = "#22c55e" if row["valid"] == "Yes" else "#ef4444" if row["valid"] == "No" else "#6b7280"
             html += f"""<tr>
-                <td style="{tds}color:#58a6ff;font-family:monospace;">{_esc(row['subdomain'])}</td>
-                <td style="{tds}font-family:monospace;">{row['ip']}</td>
-                <td style="{tds}color:{valid_color};font-weight:bold;">{row['valid']}</td>
-                <td style="{tds}">{row['issuer']}</td>
-                <td style="{tds}text-align:right;">{row['days_left']}</td>
-                <td style="{tds}">{row['protocol']}</td>
-                <td style="{tds}color:{gc};font-weight:bold;">{row['grade']}</td>
+                <td style="{tds}color:#58a6ff;font-family:monospace;">{_esc(row["subdomain"])}</td>
+                <td style="{tds}font-family:monospace;">{row["ip"]}</td>
+                <td style="{tds}color:{valid_color};font-weight:bold;">{row["valid"]}</td>
+                <td style="{tds}">{row["issuer"]}</td>
+                <td style="{tds}text-align:right;">{row["days_left"]}</td>
+                <td style="{tds}">{row["protocol"]}</td>
+                <td style="{tds}color:{gc};font-weight:bold;">{row["grade"]}</td>
             </tr>"""
         html += "</table>"
         return html
@@ -401,13 +419,13 @@ def _colab_data_table(table_type: str, table_data: list[dict]) -> str:
             https_color = "#22c55e" if row["https"] == "Yes" else "#ef4444" if row["reachable"] == "Yes" else "#6b7280"
             ms = row.get("response_ms", "-")
             html += f"""<tr>
-                <td style="{tds}color:#58a6ff;font-family:monospace;">{_esc(row['subdomain'])}</td>
-                <td style="{tds}">{row['reachable']}</td>
-                <td style="{tds}color:{https_color};font-weight:bold;">{row['https']}</td>
-                <td style="{tds}">{row['status']}</td>
-                <td style="{tds}">{row['server']}</td>
+                <td style="{tds}color:#58a6ff;font-family:monospace;">{_esc(row["subdomain"])}</td>
+                <td style="{tds}">{row["reachable"]}</td>
+                <td style="{tds}color:{https_color};font-weight:bold;">{row["https"]}</td>
+                <td style="{tds}">{row["status"]}</td>
+                <td style="{tds}">{row["server"]}</td>
                 <td style="{tds}text-align:right;">{ms}</td>
-                <td style="{tds}font-size:11px;word-break:break-all;">{row['redirect']}</td>
+                <td style="{tds}font-size:11px;word-break:break-all;">{row["redirect"]}</td>
             </tr>"""
         html += "</table>"
         return html
@@ -417,7 +435,9 @@ def _colab_data_table(table_type: str, table_data: list[dict]) -> str:
 
 def _display_colab(result: AuditResult) -> None:
     import uuid
-    from IPython.display import display as ipy_display, HTML
+
+    from IPython.display import HTML
+    from IPython.display import display as ipy_display
 
     domain = _esc(result.domain)
     grade_color = GRADE_COLORS_HTML.get(result.overall_grade, "#6b7280")
@@ -452,7 +472,9 @@ def _display_colab(result: AuditResult) -> None:
         if issue_count > 0:
             summary = f'<span style="color:{color};">{issue_count} issue(s)</span>'
         else:
-            summary = f'<span style="color:#8b949e;">{_esc(r.findings[0].get("detail", "")) if r.findings else "OK"}</span>'
+            summary = (
+                f'<span style="color:#8b949e;">{_esc(r.findings[0].get("detail", "")) if r.findings else "OK"}</span>'
+            )
 
         summary_rows += f"""
         <tr style="cursor:pointer;border-bottom:1px solid #21262d;" onclick="var d=document.getElementById('{uid}_{mod}');d.style.display=d.style.display==='none'?'block':'none';">
@@ -516,15 +538,15 @@ def _display_colab(result: AuditResult) -> None:
                             <th style="padding:6px 8px;text-align:left;color:#8b949e;">Description</th>
                         </tr>"""
                     for row in parsed:
-                        val_display = _esc(row['value'])
+                        val_display = _esc(row["value"])
                         if len(val_display) > 60:
                             val_display = val_display[:57] + "..."
                         findings_html += f"""
                         <tr style="border-bottom:1px solid #21262d;">
-                            <td style="padding:5px 8px;color:#58a6ff;font-family:monospace;">{_esc(row['tag'])}</td>
+                            <td style="padding:5px 8px;color:#58a6ff;font-family:monospace;">{_esc(row["tag"])}</td>
                             <td style="padding:5px 8px;font-family:monospace;word-break:break-all;">{val_display}</td>
-                            <td style="padding:5px 8px;font-weight:bold;">{_esc(row['name'])}</td>
-                            <td style="padding:5px 8px;color:#8b949e;">{_esc(row['description'])}</td>
+                            <td style="padding:5px 8px;font-weight:bold;">{_esc(row["name"])}</td>
+                            <td style="padding:5px 8px;color:#8b949e;">{_esc(row["description"])}</td>
                         </tr>"""
                     findings_html += "</table>"
 
@@ -538,13 +560,17 @@ def _display_colab(result: AuditResult) -> None:
                             <th style="padding:6px 8px;text-align:left;color:#8b949e;">Result</th>
                         </tr>"""
                     for t in tests:
-                        icon = '<span style="color:#22c55e;font-size:14px;">&#10004;</span>' if t["pass"] else '<span style="color:#ef4444;font-size:14px;">&#10008;</span>'
+                        icon = (
+                            '<span style="color:#22c55e;font-size:14px;">&#10004;</span>'
+                            if t["pass"]
+                            else '<span style="color:#ef4444;font-size:14px;">&#10008;</span>'
+                        )
                         result_color = "#e6edf3" if t["pass"] else "#f87171"
                         findings_html += f"""
-                        <tr style="border-bottom:1px solid #21262d;background:{'#0d1117' if t['pass'] else '#1a0d0d'};">
+                        <tr style="border-bottom:1px solid #21262d;background:{"#0d1117" if t["pass"] else "#1a0d0d"};">
                             <td style="padding:6px 8px;text-align:center;">{icon}</td>
-                            <td style="padding:6px 8px;font-weight:bold;">{_esc(t['test'])}</td>
-                            <td style="padding:6px 8px;color:{result_color};">{_esc(t['result'])}</td>
+                            <td style="padding:6px 8px;font-weight:bold;">{_esc(t["test"])}</td>
+                            <td style="padding:6px 8px;color:{result_color};">{_esc(t["result"])}</td>
                         </tr>"""
                     findings_html += "</table>"
 
@@ -564,7 +590,7 @@ def _display_colab(result: AuditResult) -> None:
                     <div style="margin:8px;padding:12px;background:#161b22;border-radius:8px;border-left:3px solid {fc};">
                         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
                             <span style="color:{fc};font-weight:bold;font-size:14px;">{fg}</span>
-                            <span style="font-weight:bold;font-size:13px;">{f.get('label','')}</span>
+                            <span style="font-weight:bold;font-size:13px;">{f.get("label", "")}</span>
                             <span style="color:#8b949e;font-size:12px;">{detail}</span>
                         </div>"""
 
@@ -599,7 +625,6 @@ def _display_colab(result: AuditResult) -> None:
             sf = sub_tables[table_key]
             sf_detail = _esc(sf.get("detail", ""))
             sf_label = _esc(sf.get("label", ""))
-            sf_fc = GRADE_COLORS_HTML.get(sf.get("grade", "-"), "#6b7280")
             sub_table_html = f"""
             <div style="margin:12px 8px 4px;padding-top:10px;border-top:1px solid #30363d;">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
@@ -622,7 +647,9 @@ def _display_colab(result: AuditResult) -> None:
                             f'<span style="display:inline-block;padding:3px 8px;margin:2px;background:#161b22;border:1px solid #21262d;border-radius:4px;font-family:monospace;font-size:12px;color:#58a6ff;">{_esc(s)}</span>'
                             for s in sub_list
                         )
-                        non_table_html += f'<div style="padding:8px 14px;display:flex;flex-wrap:wrap;gap:0;">{subs_html}</div>'
+                        non_table_html += (
+                            f'<div style="padding:8px 14px;display:flex;flex-wrap:wrap;gap:0;">{subs_html}</div>'
+                        )
             findings_html = non_table_html
 
         detail_panels += f"""
@@ -638,7 +665,7 @@ def _display_colab(result: AuditResult) -> None:
     action_html = ""
     if result.action_items:
         items_html = ""
-        for i, item in enumerate(result.action_items, 1):
+        for _i, item in enumerate(result.action_items, 1):
             sev = item["severity"]
             sev_color = SEVERITY_COLORS_HTML.get(sev, "#6b7280")
             mod_label = MODULE_LABELS.get(item.get("module", ""), item.get("module", ""))
@@ -648,7 +675,7 @@ def _display_colab(result: AuditResult) -> None:
             <div style="margin:6px 0;padding:10px 12px;background:#0d1117;border:1px solid #21262d;border-left:3px solid {sev_color};border-radius:0 6px 6px 0;">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
                     <span style="color:{sev_color};font-weight:bold;font-size:10px;text-transform:uppercase;letter-spacing:1px;padding:2px 6px;background:{sev_color}18;border-radius:3px;">{sev}</span>
-                    <span style="font-weight:bold;font-size:13px;">{_esc(item['issue'])}</span>
+                    <span style="font-weight:bold;font-size:13px;">{_esc(item["issue"])}</span>
                 </div>
                 <div style="color:#8b949e;font-size:12px;margin-left:4px;">{domain} &rsaquo; {mod_label}</div>
                 {"<div style='color:#58a6ff;font-size:12px;margin-top:4px;margin-left:4px;'>Fix: " + fix + "</div>" if fix else ""}
@@ -672,7 +699,7 @@ def _display_colab(result: AuditResult) -> None:
     js = f"""
     <script>
     function {uid}_toggleAll() {{
-        var panels = [{', '.join(f"'{uid}_{mod}'" for mod in MODULE_ORDER if mod in result.results)}];
+        var panels = [{", ".join(f"'{uid}_{mod}'" for mod in MODULE_ORDER if mod in result.results)}];
         var btn = document.getElementById('{uid}_toggleBtn');
         var expanding = btn.innerText.indexOf('Expand') !== -1;
         panels.forEach(function(id) {{

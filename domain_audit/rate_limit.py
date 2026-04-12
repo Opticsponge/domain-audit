@@ -18,7 +18,7 @@ class _TokenBucket:
     __slots__ = ("_capacity", "_rate", "_tokens", "_last_refill", "_lock")
 
     def __init__(self, rate: float, capacity: int):
-        self._rate = rate          # tokens per second
+        self._rate = rate  # tokens per second
         self._capacity = capacity  # max burst
         self._tokens = float(capacity)
         self._last_refill = time.monotonic()
@@ -88,9 +88,7 @@ class RateLimiter:
         # Acquire both global and per-host tokens
         if not self._global.acquire(timeout):
             return False
-        if not host_bucket.acquire(timeout):
-            return False
-        return True
+        return host_bucket.acquire(timeout)
 
 
 # Module-level singleton — shared across all scanners in a session.

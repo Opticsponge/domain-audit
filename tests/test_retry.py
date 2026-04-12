@@ -1,5 +1,7 @@
 import time
+
 import pytest
+
 from domain_audit.retry import RetryConfig, with_retry
 
 

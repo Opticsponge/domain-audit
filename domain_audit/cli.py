@@ -45,7 +45,8 @@ def main() -> None:
     domain = args.domain.replace("https://", "").replace("http://", "").strip("/")
 
     # Validate domain name
-    from domain_audit.validators import validate_domain, DomainValidationError
+    from domain_audit.validators import DomainValidationError, validate_domain
+
     try:
         domain = validate_domain(domain)
     except DomainValidationError as exc:
