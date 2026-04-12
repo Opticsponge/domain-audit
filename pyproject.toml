@@ -48,6 +48,8 @@ dev = [
     "pytest-mock>=3.0",
     "build>=1.0",
     "twine>=5.0",
+    "ruff>=0.4",
+    "mypy>=1.10",
 ]
 
 [project.scripts]
@@ -59,3 +61,26 @@ include = ["domain_audit*"]
 
 [tool.setuptools.package-data]
 domain_audit = ["py.typed", "scanners/tech_patterns/*.json"]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_unused_configs = true
+ignore_missing_imports = true
+disable_error_code = ["import-untyped"]
+check_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = ["mcp.*"]
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+module = ["domain_audit.scanners.subdomains"]
+disable_error_code = ["union-attr", "arg-type", "misc", "dict-item"]
