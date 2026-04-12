@@ -167,11 +167,15 @@ def _check_cookies(domain: str) -> dict[str, Any]:
 
         for cookie_str in set_cookie_headers:
             name = cookie_str.split("=", 1)[0].strip() if "=" in cookie_str else cookie_str.split(";")[0].strip()
-            lower = cookie_str.lower()
 
-            has_secure = "secure" in lower
-            has_httponly = "httponly" in lower
-            has_samesite = "samesite" in lower
+            # Parse cookie attributes by splitting on semicolons
+            # Attributes are after the first name=value pair
+            attrs = [a.strip().lower() for a in cookie_str.split(";")[1:]]
+            attr_names = [a.split("=")[0].strip() for a in attrs]
+
+            has_secure = "secure" in attr_names
+            has_httponly = "httponly" in attr_names
+            has_samesite = any(a.startswith("samesite") for a in attr_names)
 
             cookie_issues = []
             if not has_secure:

@@ -308,14 +308,18 @@ def _check_dmarc(domain: str) -> dict[str, Any]:
     else:
         result["tests"].append({"test": "DMARC Multiple Records", "pass": True, "result": "Single DMARC record found"})
 
+    # Use parsed tags for policy checks (not substring matching)
+    tags = {row["tag"]: row["value"] for row in result["parsed"]}
+
     # Test 4: Policy
-    if "p=reject" in dmarc:
+    policy = tags.get("p", "").lower()
+    if policy == "reject":
         result["tests"].append({"test": "DMARC Policy Enabled", "pass": True, "result": "DMARC Reject policy enabled"})
         result["grade"] = "A"
-    elif "p=quarantine" in dmarc:
+    elif policy == "quarantine":
         result["tests"].append({"test": "DMARC Policy Enabled", "pass": True, "result": "DMARC Quarantine policy enabled"})
         result["grade"] = "B"
-    elif "p=none" in dmarc:
+    elif policy == "none":
         result["tests"].append({"test": "DMARC Policy Enabled", "pass": False, "result": "DMARC policy is 'none' — monitoring only, not enforcing"})
         result["grade"] = "C"
     else:
@@ -323,14 +327,15 @@ def _check_dmarc(domain: str) -> dict[str, Any]:
         result["grade"] = "C"
 
     # Test 5: Reporting configured?
-    has_rua = "rua=" in dmarc
+    has_rua = "rua" in tags
     if has_rua:
         result["tests"].append({"test": "DMARC Reporting", "pass": True, "result": "Aggregate reporting (rua) is configured"})
     else:
         result["tests"].append({"test": "DMARC Reporting", "pass": False, "result": "No aggregate reporting (rua) configured — you won't receive DMARC reports"})
 
     # Test 6: Percentage
-    pct_match = re.search(r"pct=(\d+)", dmarc)
+    pct_str = tags.get("pct")
+    pct_match = re.match(r"(\d+)", pct_str) if pct_str else None
     if pct_match:
         pct = int(pct_match.group(1))
         if pct == 100:

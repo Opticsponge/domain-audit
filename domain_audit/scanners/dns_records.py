@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import socket
 import time
 from typing import Any
 
@@ -88,6 +89,69 @@ def _parse_caa(records: list[str]) -> list[dict[str, str]]:
     return parsed
 
 
+DANGEROUS_PORTS = {
+    1433: "MSSQL", 3306: "MySQL", 3389: "RDP", 5432: "PostgreSQL",
+    9200: "Elasticsearch", 27017: "MongoDB",
+}
+
+
+def _check_port(ip: str, port: int) -> bool:
+    """Quick check if a port is open on an IP."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(2.0)
+    try:
+        return sock.connect_ex((ip, port)) == 0
+    except (socket.timeout, OSError):
+        return False
+    finally:
+        sock.close()
+
+
+def _check_ips(ips: list[str]) -> list[dict[str, Any]]:
+    """Get reverse DNS, geolocation, and dangerous port scan for each IP."""
+    import requests
+    results = []
+    for ip in ips[:5]:  # Limit to 5 IPs
+        info: dict[str, Any] = {
+            "ip": ip, "reverse_dns": "-", "org": "-",
+            "city": "-", "country": "-", "open_dangerous_ports": [],
+        }
+
+        # Reverse DNS
+        try:
+            hostname = socket.gethostbyaddr(ip)
+            info["reverse_dns"] = hostname[0]
+        except (socket.herror, socket.gaierror, OSError):
+            pass
+
+        # IP geolocation via ip-api.com (free, no key, 45 req/min)
+        try:
+            resp = requests.get(
+                f"http://ip-api.com/json/{ip}",
+                params={"fields": "status,country,city,isp,org,as"},
+                timeout=5.0,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("status") == "success":
+                    info["org"] = data.get("org") or data.get("isp") or "-"
+                    info["city"] = data.get("city") or "-"
+                    info["country"] = data.get("country") or "-"
+                    info["as"] = data.get("as") or "-"
+        except Exception:
+            pass
+
+        # Quick scan of dangerous ports on this IP
+        open_dangerous = []
+        for port, service in DANGEROUS_PORTS.items():
+            if _check_port(ip, port):
+                open_dangerous.append({"port": port, "service": service})
+        info["open_dangerous_ports"] = open_dangerous
+
+        results.append(info)
+    return results
+
+
 def scan(domain: str) -> ScanResult:
     start = time.time()
     findings = []
@@ -154,6 +218,58 @@ def scan(domain: str) -> ScanResult:
                 "grade": "?",
                 "detail": f"Could not query {rdtype}: {exc}",
                 "fix": "",
+            })
+
+    # ── IP info for A records ──
+    a_records = raw_data.get("A", [])
+    if a_records:
+        ip_info = _check_ips(a_records)
+        raw_data["ip_info"] = ip_info
+
+        ip_table = []
+        all_dangerous = []
+        for info in ip_info:
+            dangerous = info.get("open_dangerous_ports", [])
+            dangerous_str = ", ".join("{}/{}".format(p["port"], p["service"]) for p in dangerous) if dangerous else "None"
+            all_dangerous.extend(dangerous)
+
+            ip_table.append({
+                "tag": info["ip"],
+                "value": info.get("reverse_dns", "-"),
+                "name": info.get("org", "-"),
+                "description": "{}, {} | Dangerous ports: {}".format(
+                    info.get("city", ""), info.get("country", ""), dangerous_str
+                ).strip(", "),
+            })
+
+        ip_tests = []
+        if all_dangerous:
+            ports_str = ", ".join("{}/{}".format(p["port"], p["service"]) for p in all_dangerous)
+            ip_tests.append({
+                "test": "Dangerous Ports on IP",
+                "pass": False,
+                "result": f"Found open dangerous ports: {ports_str}",
+            })
+            ip_grade = "F"
+        else:
+            ip_tests.append({
+                "test": "Dangerous Ports on IP",
+                "pass": True,
+                "result": f"No dangerous ports open on {len(a_records)} IP(s)",
+            })
+            ip_grade = "-"
+
+        if ip_table:
+            findings.append({
+                "label": "IP Address Info",
+                "value": ip_info,
+                "grade": ip_grade,
+                "detail": f"Resolved to {len(a_records)} IP(s)" + (f" — {len(all_dangerous)} dangerous port(s) open!" if all_dangerous else ""),
+                "fix": "Close dangerous ports or restrict access via firewall" if all_dangerous else "",
+                "parsed_record": ip_table,
+                "tests": ip_tests,
+                "record_type": "IP Info",
+                "domain": domain,
             })
 
     # ── Zone transfer test ──
