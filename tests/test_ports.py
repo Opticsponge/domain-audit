@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from domain_audit.scanners.ports import scan
+from domain_audit.scanners.ports import PORT_CLOSED, PORT_OPEN, scan
 
 
 class TestPortsScan:
@@ -8,7 +8,7 @@ class TestPortsScan:
     @patch("domain_audit.scanners.ports.socket.gethostbyname", return_value="1.2.3.4")
     def test_only_web_ports(self, mock_dns, mock_check):
         def check_port(domain, port):
-            return port, port in (80, 443)
+            return port, PORT_OPEN if port in (80, 443) else PORT_CLOSED
 
         mock_check.side_effect = check_port
         result = scan("example.com")
@@ -18,7 +18,7 @@ class TestPortsScan:
     @patch("domain_audit.scanners.ports.socket.gethostbyname", return_value="1.2.3.4")
     def test_dangerous_port_open(self, mock_dns, mock_check):
         def check_port(domain, port):
-            return port, port in (80, 443, 3306)
+            return port, PORT_OPEN if port in (80, 443, 3306) else PORT_CLOSED
 
         mock_check.side_effect = check_port
         result = scan("example.com")

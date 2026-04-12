@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import io
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Callable
+from typing import Any
 
 from domain_audit.grader import ScanResult, compute_overall_grade, generate_action_items
 from domain_audit.scanners import SCANNERS
@@ -268,7 +269,7 @@ def audit(
         if progress_cb:
             progress_cb("subdomains", None)
         try:
-            sub_result = scanner_map["subdomains"](domain, deep=deep_subdomains)  # type: ignore[call-arg]
+            sub_result = scanner_map["subdomains"](domain, deep=deep_subdomains)  # type: ignore[call-arg, operator]
             results["subdomains"] = sub_result
             discovered_subdomains = sub_result.raw_data.get("all_subdomains", [])
         except Exception as exc:
@@ -306,7 +307,8 @@ def audit(
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_name = {
-            executor.submit(_make_scanner_call, name, scan_func, domain): name for name, scan_func in remaining.items()
+            executor.submit(_make_scanner_call, name, scan_func, domain): name  # type: ignore[arg-type]
+            for name, scan_func in remaining.items()
         }
 
         for future in as_completed(future_to_name):
