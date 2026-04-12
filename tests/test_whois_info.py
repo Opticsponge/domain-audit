@@ -32,9 +32,11 @@ class TestWhoisScan:
         result = scan("example.com")
         assert result.grade == "F"
 
+    @patch("domain_audit.scanners.whois_info._rdap_lookup")
     @patch("domain_audit.scanners.whois_info._whois_lookup")
-    def test_lookup_failure(self, mock_lookup):
+    def test_lookup_failure(self, mock_lookup, mock_rdap):
         mock_lookup.side_effect = Exception("WHOIS server unreachable")
+        mock_rdap.side_effect = Exception("RDAP also failed")
         result = scan("example.com")
         assert result.status == "error"
         assert result.grade == "?"

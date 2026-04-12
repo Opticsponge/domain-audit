@@ -17,6 +17,122 @@ def _whois_lookup(domain: str) -> Any:
     return whois.whois(domain)
 
 
+def _rdap_lookup(domain: str) -> dict[str, Any]:
+    """Fallback: RDAP lookup over HTTPS. Works when WHOIS socket is blocked."""
+    import requests
+
+    # Step 1: Find the RDAP server for this TLD
+    tld = domain.rsplit(".", 1)[-1]
+    bootstrap = requests.get("https://data.iana.org/rdap/dns.json", timeout=10.0).json()
+    rdap_url = None
+    for entry in bootstrap.get("services", []):
+        tlds, urls = entry
+        if tld in tlds:
+            rdap_url = urls[0]
+            break
+
+    if not rdap_url:
+        raise ValueError(f"No RDAP server found for TLD .{tld}")
+
+    # Step 2: Query RDAP
+    url = f"{rdap_url.rstrip('/')}/domain/{domain}"
+    resp = requests.get(url, timeout=10.0, headers={"Accept": "application/rdap+json"})
+    resp.raise_for_status()
+    data = resp.json()
+
+    # Step 3: Parse into whois-like structure
+    result: dict[str, Any] = {
+        "registrar": None,
+        "registrar_url": None,
+        "creation_date": None,
+        "expiration_date": None,
+        "updated_date": None,
+        "name_servers": [],
+        "status": [],
+        "name": None,
+        "org": None,
+        "country": None,
+        "dnssec": None,
+        "whois_server": None,
+    }
+
+    # Events (dates)
+    for event in data.get("events", []):
+        action = event.get("eventAction", "")
+        date_str = event.get("eventDate", "")
+        if date_str:
+            try:
+                dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+            except ValueError:
+                dt = None
+            if action == "registration" and dt:
+                result["creation_date"] = dt
+            elif action == "expiration" and dt:
+                result["expiration_date"] = dt
+            elif action == "last changed" and dt:
+                result["updated_date"] = dt
+
+    # Status
+    result["status"] = data.get("status", [])
+
+    # Nameservers
+    for ns in data.get("nameservers", []):
+        name = ns.get("ldhName", "")
+        if name:
+            result["name_servers"].append(name)
+
+    # Entities (registrar, registrant)
+    for entity in data.get("entities", []):
+        roles = entity.get("roles", [])
+        if "registrar" in roles:
+            vcard = _rdap_vcard(entity)
+            result["registrar"] = vcard.get("fn", None)
+            result["registrar_url"] = entity.get("publicIds", [{}])[0].get("identifier") if entity.get("publicIds") else None
+        if "registrant" in roles:
+            vcard = _rdap_vcard(entity)
+            result["name"] = vcard.get("fn", None)
+            result["org"] = vcard.get("org", None)
+            result["country"] = vcard.get("country", None)
+
+    # DNSSEC
+    sec_dns = data.get("secureDNS", {})
+    if sec_dns.get("delegationSigned"):
+        result["dnssec"] = "signedDelegation"
+    else:
+        result["dnssec"] = "unsigned"
+
+    return result
+
+
+def _rdap_vcard(entity: dict) -> dict[str, str]:
+    """Extract name/org/country from RDAP entity vCard."""
+    info: dict[str, str] = {}
+    vcard_array = entity.get("vcardArray", [])
+    if len(vcard_array) >= 2:
+        for entry in vcard_array[1]:
+            if len(entry) >= 4:
+                prop = entry[0]
+                value = entry[3]
+                if prop == "fn":
+                    info["fn"] = str(value)
+                elif prop == "org":
+                    info["org"] = str(value)
+                elif prop == "adr" and isinstance(value, list):
+                    # Country is typically last element
+                    if len(value) >= 7 and value[6]:
+                        info["country"] = str(value[6])
+    return info
+
+
+class _RdapAsWhois:
+    """Adapter: makes RDAP result look like python-whois result."""
+    def __init__(self, data: dict[str, Any]):
+        self._data = data
+
+    def __getattr__(self, name: str) -> Any:
+        return self._data.get(name)
+
+
 def scan(domain: str) -> ScanResult:
     start = time.time()
     retries = 0
@@ -24,7 +140,19 @@ def scan(domain: str) -> ScanResult:
     raw_data: dict[str, Any] = {}
 
     try:
-        w = _whois_lookup(domain)
+        # Try python-whois first, fall back to RDAP
+        w = None
+        try:
+            w = _whois_lookup(domain)
+            # Verify we got useful data (some TLDs return empty)
+            if not w.registrar and not w.creation_date and not w.expiration_date:
+                raise ValueError("WHOIS returned empty data")
+            raw_data["source"] = "whois"
+        except Exception:
+            # Fallback to RDAP
+            rdap_data = _rdap_lookup(domain)
+            w = _RdapAsWhois(rdap_data)
+            raw_data["source"] = "rdap"
 
         # ── Extract all available WHOIS fields ──
         raw_data["registrar"] = w.registrar
