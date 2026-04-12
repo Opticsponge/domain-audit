@@ -13,16 +13,22 @@ COMMON_PORTS = {
     25: "SMTP",
     80: "HTTP",
     443: "HTTPS",
+    1433: "MSSQL",
     3306: "MySQL",
     3389: "RDP",
     5432: "PostgreSQL",
     8080: "HTTP-Alt",
     8443: "HTTPS-Alt",
+    9200: "Elasticsearch",
+    9300: "Elasticsearch-Transport",
+    27017: "MongoDB",
+    27018: "MongoDB-Shard",
+    27019: "MongoDB-Config",
 }
 
 EXPECTED_PORTS = {80, 443}
 ACCEPTABLE_PORTS = {22, 25}
-DANGEROUS_PORTS = {3306, 3389, 5432}
+DANGEROUS_PORTS = {1433, 3306, 3389, 5432, 9200, 9300, 27017, 27018, 27019}
 
 PORT_TIMEOUT = 3.0
 
