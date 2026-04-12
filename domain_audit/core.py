@@ -257,12 +257,40 @@ def audit(
         else:
             progress_cb = _make_progress_terminal(domain, scanner_names)
 
-    # Run scanners in parallel
+    # Phase 1: Run subdomain scanner first (if selected) so port scanner can use results
+    discovered_subdomains: list[str] = []
+    if "subdomains" in scanner_map:
+        if progress_cb:
+            progress_cb("subdomains", None)
+        try:
+            sub_result = scanner_map["subdomains"](domain, deep=deep_subdomains)
+            results["subdomains"] = sub_result
+            discovered_subdomains = sub_result.raw_data.get("all_subdomains", [])
+        except Exception as exc:
+            results["subdomains"] = ScanResult(
+                module="subdomains",
+                status="error",
+                grade="?",
+                findings=[{
+                    "label": "subdomains scanner",
+                    "value": f"Unexpected error: {safe_error(exc)}",
+                    "grade": "?",
+                    "detail": safe_error(exc),
+                    "fix": "",
+                }],
+                raw_data={"error": safe_error(exc)},
+            )
+        if progress_cb:
+            progress_cb("subdomains", results["subdomains"])
+
+    # Phase 2: Run remaining scanners in parallel
+    remaining = {k: v for k, v in scanner_map.items() if k != "subdomains"}
+
     def _make_scanner_call(name: str, scan_func: Callable, domain: str) -> tuple[str, ScanResult]:
         if progress_cb:
             progress_cb(name, None)  # Signal: scanner starting
-        if name == "subdomains":
-            result = scan_func(domain, deep=deep_subdomains)
+        if name == "ports":
+            result = scan_func(domain, subdomains=discovered_subdomains)
         else:
             result = scan_func(domain)
         return name, result
@@ -270,7 +298,7 @@ def audit(
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_name = {
             executor.submit(_make_scanner_call, name, scan_func, domain): name
-            for name, scan_func in scanner_map.items()
+            for name, scan_func in remaining.items()
         }
 
         for future in as_completed(future_to_name):
