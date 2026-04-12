@@ -96,6 +96,25 @@ def scan_tech(domain: str) -> dict:
     return _run_scanner("tech", domain)
 
 
+@mcp.tool()
+def audit_domain(
+    domain: str,
+    scanners: list[str] | None = None,
+    deep: bool = False,
+) -> dict:
+    """Run comprehensive domain health audit across all or selected scanners.
+
+    Returns overall grade, per-module results, and prioritised action items.
+    Pass scanner names (dns, ssl, headers, whois, ports, email, tech, subdomains)
+    to run specific modules only.
+    """
+    try:
+        result = audit(domain, only=scanners, show=False, deep_subdomains=deep)
+        return result.to_dict()
+    except Exception as exc:
+        return {"error": str(exc), "domain": domain}
+
+
 def main():
     mcp.run(transport="stdio")
 
