@@ -228,6 +228,7 @@ def audit(
     show: bool = True,
     deep_subdomains: bool = False,
     progress: bool | None = None,
+    tech_patterns: dict | None = None,
 ) -> AuditResult:
     """Run domain audit.
 
@@ -291,6 +292,8 @@ def audit(
             progress_cb(name, None)  # Signal: scanner starting
         if name == "ports":
             result = scan_func(domain, subdomains=discovered_subdomains)
+        elif name == "tech" and tech_patterns:
+            result = scan_func(domain, custom_patterns=tech_patterns)
         else:
             result = scan_func(domain)
         return name, result

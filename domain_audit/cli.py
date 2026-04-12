@@ -33,6 +33,11 @@ def main() -> None:
         action="store_true",
         help="Deep subdomain scanning — probe each subdomain for DNS/SSL/HTTP (slower)",
     )
+    parser.add_argument(
+        "--tech-patterns",
+        help="Path to JSON file with custom technology detection patterns",
+        default=None,
+    )
 
     args = parser.parse_args()
 
@@ -49,10 +54,20 @@ def main() -> None:
 
     only = args.only.split(",") if args.only else None
 
+    # Load custom tech patterns if provided
+    tech_patterns = None
+    if args.tech_patterns:
+        try:
+            with open(args.tech_patterns) as f:
+                tech_patterns = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError) as exc:
+            print(f"Error loading tech patterns: {exc}", file=sys.stderr)
+            sys.exit(1)
+
     from domain_audit.core import audit
 
     if args.format == "json":
-        result = audit(domain, only=only, show=False, deep_subdomains=args.deep)
+        result = audit(domain, only=only, show=False, deep_subdomains=args.deep, tech_patterns=tech_patterns)
         data = json.dumps(result.to_dict(), indent=2, default=str)
         if args.output:
             with open(args.output, "w") as f:
@@ -62,7 +77,7 @@ def main() -> None:
             print(data)
 
     elif args.format == "csv":
-        result = audit(domain, only=only, show=False, deep_subdomains=args.deep)
+        result = audit(domain, only=only, show=False, deep_subdomains=args.deep, tech_patterns=tech_patterns)
         if args.output:
             result.to_csv(args.output)
             print(f"CSV output written to {args.output}")
@@ -71,7 +86,7 @@ def main() -> None:
 
     else:
         # Table format — auto-display via show=True
-        audit(domain, only=only, show=True, deep_subdomains=args.deep)
+        audit(domain, only=only, show=True, deep_subdomains=args.deep, tech_patterns=tech_patterns)
 
 
 if __name__ == "__main__":

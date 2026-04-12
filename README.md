@@ -73,6 +73,9 @@ domain-audit example.com --format json
 
 # CSV export
 domain-audit example.com --format csv -o results.csv
+
+# Custom tech detection patterns
+domain-audit example.com --tech-patterns my_patterns.json
 ```
 
 ### Python API
@@ -101,7 +104,7 @@ results.to_csv("audit.csv")
 | **WHOIS** | Registrar info, domain creation & expiration dates, name servers | A-F |
 | **Email Security** | SPF (parsed tags + chain lookup limit), DKIM (36 selectors), DMARC (parsed tags + policy tests) — MXToolbox-style tables | A-F |
 | **Open Ports** | 16 ports across main domain + all discovered subdomains: FTP, SSH, SMTP, HTTP, HTTPS, MSSQL, MySQL, RDP, PostgreSQL, Elasticsearch (9200/9300), MongoDB (27017-27019), 8080, 8443 | A-F |
-| **Tech Stack** | Web server, CMS, frameworks via headers, meta tags, and URL patterns | Informational |
+| **Tech Stack** | 5-source detection: response headers, meta tags, URL paths, asset/CDN URL fingerprinting, inline JS markers — ~100 built-in technologies across 8 categories + custom patterns | Informational |
 
 ## Grading System
 
@@ -141,13 +144,84 @@ headers     Security headers + redirect chain analysis + cookie security flags
 whois       WHOIS registration, domain expiry, name servers
 ports       16-port scan across main domain + subdomains (HTTP, HTTPS, SSH, SMTP, MSSQL, MySQL, RDP, PostgreSQL, Elasticsearch, MongoDB)
 email       SPF/DKIM/DMARC with parsed record tables, validation tests, SPF lookup chain counting
-tech        Server, CMS, framework fingerprinting via headers and HTML
+tech        5-source fingerprinting: headers, meta tags, URL paths, CDN/asset URLs, inline JS markers
 ```
 
 Run specific ones with `--only`:
 ```bash
 domain-audit example.com --only ssl,email,headers
 ```
+
+## Tech Stack Detection
+
+The tech scanner uses 5 detection sources to identify ~100 technologies:
+
+| Source | How It Works | Example |
+|--------|-------------|---------|
+| **Response Headers** | Checks `Server`, `X-Powered-By`, `X-Generator`, etc. | nginx, ASP.NET, Shopify |
+| **Meta Tags** | Parses `<meta name="generator">` | WordPress 6.4 |
+| **URL Paths** | Finds CMS paths in page HTML (`/wp-admin/`, `/administrator/`) | WordPress, Joomla, Drupal |
+| **Asset URLs** | Fingerprints `<script src>` / `<link href>` by CDN domain and filename | Webflow from CDN URL, React from bundle name |
+| **Inline JS** | Detects framework globals (`__NEXT_DATA__`, `Shopify.`, `wixBiSession`) | Next.js, Shopify, Wix |
+
+Results are grouped into 8 categories: Server/Hosting, Framework/CMS, UI/CSS, Analytics/Marketing, Developer Tools, Chat/Support, Payments, Security/Compliance.
+
+### Custom Tech Patterns
+
+Add your own detection patterns via Python API, CLI, or MCP:
+
+**Python API:**
+
+```python
+from domain_audit import audit
+
+result = audit("example.com", tech_patterns={
+    "cdn_domains": [
+        {"pattern": "my-cdn.corp.com", "name": "CorpCDN", "category": "Server / Hosting"},
+    ],
+    "asset_paths": [
+        {"pattern": r"my-framework[.\-]", "name": "MyFramework", "category": "Framework / CMS"},
+    ],
+    "inline_js": [
+        {"pattern": "__MY_APP__", "name": "MyApp"},
+    ],
+    "headers": [
+        {"pattern": "X-My-Platform", "name": "", "category": "Server / Hosting"},
+    ],
+    "paths": [
+        {"pattern": "/my-admin/", "name": "MyPlatform"},
+    ],
+})
+```
+
+**CLI with JSON file:**
+
+```bash
+domain-audit example.com --tech-patterns patterns.json
+```
+
+```json
+{
+  "cdn_domains": [
+    {"pattern": "internal-cdn.corp.com", "name": "Internal CDN", "category": "Server / Hosting"}
+  ],
+  "asset_paths": [
+    {"pattern": "my-framework[.\\-]", "name": "MyFramework", "category": "Framework / CMS"}
+  ]
+}
+```
+
+**Pattern types:**
+
+| Key | Match Method | Use For |
+|-----|-------------|---------|
+| `cdn_domains` | Substring match on asset URLs | CDN domains, hosting platforms |
+| `asset_paths` | Regex match on `<script>`/`<link>` URLs | JS libraries, framework bundles |
+| `inline_js` | Regex match on page HTML | JS globals, framework markers |
+| `headers` | Header name lookup (empty `name` → use header value) | Custom response headers |
+| `paths` | Substring match in page HTML | CMS admin paths, known routes |
+
+Each pattern: `{"pattern": "...", "name": "TechName", "category": "Optional Category"}`. Category defaults to "Other" if omitted. Patterns are additive — they extend the built-in set, never replace it.
 
 ## Output Formats
 
