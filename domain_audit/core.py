@@ -227,8 +227,15 @@ def audit(
     max_workers: int = 8,
     show: bool = True,
     deep_subdomains: bool = False,
+    progress: bool | None = None,
 ) -> AuditResult:
-    """Run domain audit. Set deep_subdomains=True to probe each subdomain for DNS/SSL/HTTP (slower)."""
+    """Run domain audit.
+
+    Args:
+        progress: Show live progress during scanning.
+                  None (default) = auto-detect (True in Colab, follows *show* in terminal).
+                  True = always show progress. False = never.
+    """
     start = time.time()
 
     # Select scanners
@@ -241,17 +248,19 @@ def audit(
     results: dict[str, ScanResult] = {}
 
     # Set up progress callback
-    progress: Callable[[str, ScanResult | None], None] | None = None
-    if show:
+    # Default: always show in Colab (even with show=False), follow `show` in terminal
+    show_progress = progress if progress is not None else (_is_colab() or show)
+    progress_cb: Callable[[str, ScanResult | None], None] | None = None
+    if show_progress:
         if _is_colab():
-            progress = _make_progress_colab(domain, scanner_names)
+            progress_cb = _make_progress_colab(domain, scanner_names)
         else:
-            progress = _make_progress_terminal(domain, scanner_names)
+            progress_cb = _make_progress_terminal(domain, scanner_names)
 
     # Run scanners in parallel
     def _make_scanner_call(name: str, scan_func: Callable, domain: str) -> tuple[str, ScanResult]:
-        if progress:
-            progress(name, None)  # Signal: scanner starting
+        if progress_cb:
+            progress_cb(name, None)  # Signal: scanner starting
         if name == "subdomains":
             result = scan_func(domain, deep=deep_subdomains)
         else:
@@ -269,8 +278,8 @@ def audit(
             try:
                 _, result = future.result()
                 results[name] = result
-                if progress:
-                    progress(name, result)
+                if progress_cb:
+                    progress_cb(name, result)
             except Exception as exc:
                 err_result = ScanResult(
                     module=name,
@@ -286,8 +295,8 @@ def audit(
                     raw_data={"error": safe_error(exc)},
                 )
                 results[name] = err_result
-                if progress:
-                    progress(name, err_result)
+                if progress_cb:
+                    progress_cb(name, err_result)
 
     overall_grade = compute_overall_grade(results)
     action_items = generate_action_items(results)
