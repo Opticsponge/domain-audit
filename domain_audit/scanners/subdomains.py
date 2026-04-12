@@ -242,7 +242,8 @@ def _build_http_table(probes: list[dict]) -> list[dict[str, str]]:
 #  Main scan
 # ═══════════════════════════════════════════════════════════════════
 
-def scan(domain: str) -> ScanResult:
+def scan(domain: str, deep: bool = False) -> ScanResult:
+    """Scan subdomains. deep=True probes each subdomain for DNS/SSL/HTTP (slower)."""
     start = time.time()
     raw_data: dict[str, Any] = {}
 
@@ -251,23 +252,25 @@ def scan(domain: str) -> ScanResult:
         raw_data["total_discovered"] = len(all_subs)
         raw_data["all_subdomains"] = all_subs
 
-        # Limit how many we scan in detail
-        subs_to_scan = all_subs[:MAX_SUBDOMAIN_SCAN]
-        raw_data["scanned_count"] = len(subs_to_scan)
-
-        # Probe subdomains in parallel
+        # Deep mode: probe each subdomain for DNS/SSL/HTTP
         probes: list[dict[str, Any]] = []
-        if subs_to_scan:
-            with ThreadPoolExecutor(max_workers=10) as executor:
-                futures = {
-                    executor.submit(_probe_subdomain, sub): sub
-                    for sub in subs_to_scan
-                }
-                for future in as_completed(futures):
-                    try:
-                        probes.append(future.result())
-                    except Exception:
-                        pass
+        if deep:
+            subs_to_scan = all_subs[:MAX_SUBDOMAIN_SCAN]
+            raw_data["scanned_count"] = len(subs_to_scan)
+
+            if subs_to_scan:
+                with ThreadPoolExecutor(max_workers=10) as executor:
+                    futures = {
+                        executor.submit(_probe_subdomain, sub): sub
+                        for sub in subs_to_scan
+                    }
+                    for future in as_completed(futures):
+                        try:
+                            probes.append(future.result())
+                        except Exception:
+                            pass
+        else:
+            raw_data["scanned_count"] = 0
 
         # Sort by subdomain name
         probes.sort(key=lambda p: p["subdomain"])
@@ -290,13 +293,32 @@ def scan(domain: str) -> ScanResult:
         findings = []
 
         # Discovery summary
+        scanned_count = raw_data["scanned_count"]
+        detail_msg = f"Found {len(all_subs)} subdomain(s) via CT logs"
+        if deep:
+            detail_msg += f", scanned {scanned_count} in detail"
+        else:
+            detail_msg += " (use deep=True to probe each subdomain)"
+
         findings.append({
             "label": "Subdomains discovered",
             "value": all_subs,
             "grade": "-",
-            "detail": f"Found {len(all_subs)} subdomain(s) via CT logs, scanned {len(subs_to_scan)} in detail",
+            "detail": detail_msg,
             "fix": "",
         })
+
+        # Only add detail tables if deep mode was used
+        if not probes:
+            return ScanResult(
+                module="subdomains",
+                status="pass",
+                grade="-",
+                findings=findings,
+                raw_data=raw_data,
+                elapsed=time.time() - start,
+                retries=0,
+            )
 
         # DNS table finding
         findings.append({

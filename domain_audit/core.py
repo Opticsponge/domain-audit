@@ -72,7 +72,9 @@ def audit(
     only: list[str] | None = None,
     max_workers: int = 8,
     show: bool = True,
+    deep_subdomains: bool = False,
 ) -> AuditResult:
+    """Run domain audit. Set deep_subdomains=True to probe each subdomain for DNS/SSL/HTTP (slower)."""
     start = time.time()
 
     # Select scanners
@@ -84,9 +86,15 @@ def audit(
     results: dict[str, ScanResult] = {}
 
     # Run scanners in parallel
+    # Subdomain scanner gets the deep flag
+    def _make_scanner_call(name, scan_func, domain):
+        if name == "subdomains":
+            return scan_func(domain, deep=deep_subdomains)
+        return scan_func(domain)
+
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_name = {
-            executor.submit(scan_func, domain): name
+            executor.submit(_make_scanner_call, name, scan_func, domain): name
             for name, scan_func in scanner_map.items()
         }
 

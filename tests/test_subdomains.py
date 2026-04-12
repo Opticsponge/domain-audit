@@ -84,13 +84,21 @@ class TestSubdomainScan:
             "http": {"reachable": True, "status_code": 200, "https": True, "server": "nginx", "redirect": None, "response_ms": 50},
         }
 
-        result = scan("example.com")
+        result = scan("example.com", deep=True)
         assert result.module == "subdomains"
         # Should have findings with table_type
         table_types = [f.get("table_type") for f in result.findings if f.get("table_type")]
         assert "dns" in table_types
         assert "ssl" in table_types
         assert "http" in table_types
+
+    @patch("domain_audit.scanners.subdomains._discover_subdomains")
+    def test_scan_shallow_no_tables(self, mock_discover):
+        mock_discover.return_value = ["sub1.example.com"]
+        result = scan("example.com", deep=False)
+        table_types = [f.get("table_type") for f in result.findings if f.get("table_type")]
+        assert table_types == []
+        assert "deep=True" in result.findings[0]["detail"]
 
     @patch("domain_audit.scanners.subdomains._discover_subdomains")
     def test_scan_handles_ct_error(self, mock_discover):

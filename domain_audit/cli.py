@@ -28,6 +28,11 @@ def main() -> None:
         help="Output file path (for json/csv formats)",
         default=None,
     )
+    parser.add_argument(
+        "--deep",
+        action="store_true",
+        help="Deep subdomain scanning — probe each subdomain for DNS/SSL/HTTP (slower)",
+    )
 
     args = parser.parse_args()
 
@@ -39,7 +44,7 @@ def main() -> None:
     from domain_audit.core import audit
 
     if args.format == "json":
-        result = audit(domain, only=only, show=False)
+        result = audit(domain, only=only, show=False, deep_subdomains=args.deep)
         data = json.dumps(result.to_dict(), indent=2, default=str)
         if args.output:
             with open(args.output, "w") as f:
@@ -49,7 +54,7 @@ def main() -> None:
             print(data)
 
     elif args.format == "csv":
-        result = audit(domain, only=only, show=False)
+        result = audit(domain, only=only, show=False, deep_subdomains=args.deep)
         if args.output:
             result.to_csv(args.output)
             print(f"CSV output written to {args.output}")
@@ -58,7 +63,7 @@ def main() -> None:
 
     else:
         # Table format — auto-display via show=True
-        audit(domain, only=only, show=True)
+        audit(domain, only=only, show=True, deep_subdomains=args.deep)
 
 
 if __name__ == "__main__":
