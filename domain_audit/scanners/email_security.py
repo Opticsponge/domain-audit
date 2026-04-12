@@ -79,6 +79,13 @@ def _resolve_txt(name: str) -> list[str]:
 #  SPF
 # ═══════════════════════════════════════════════════════════════════
 
+def _strip_qualifier(part: str) -> tuple[str, str]:
+    """Strip SPF qualifier prefix (+, -, ~, ?) and return (qualifier, mechanism)."""
+    if part and part[0] in "+-~?":
+        return part[0], part[1:]
+    return "+", part  # default qualifier is pass
+
+
 def _parse_spf(record: str) -> list[dict[str, str]]:
     """Parse SPF record into tag/value table rows."""
     rows = []
@@ -86,27 +93,31 @@ def _parse_spf(record: str) -> list[dict[str, str]]:
     for part in parts:
         if part.startswith("v="):
             rows.append({"tag": "v", "value": part[2:], "name": "Version", "description": SPF_MECHANISM_INFO["v"][1]})
-        elif part.startswith("include:"):
-            domain = part[8:]
-            rows.append({"tag": "include", "value": domain, "name": "Include", "description": f"Authorizes senders from {domain}'s SPF policy."})
-        elif part.startswith("redirect="):
-            domain = part[9:]
+            continue
+
+        qualifier, mech = _strip_qualifier(part)
+        qual_label = {"+": "Pass", "-": "Fail", "~": "SoftFail", "?": "Neutral"}.get(qualifier, "")
+
+        if mech.startswith("include:"):
+            domain = mech[8:]
+            rows.append({"tag": "include", "value": domain, "name": f"Include ({qual_label})", "description": f"Authorizes senders from {domain}'s SPF policy."})
+        elif mech.startswith("redirect="):
+            domain = mech[9:]
             rows.append({"tag": "redirect", "value": domain, "name": "Redirect", "description": f"Redirects SPF evaluation to {domain}."})
-        elif part.startswith("ip4:"):
-            rows.append({"tag": "ip4", "value": part[4:], "name": "IPv4 Address", "description": f"Authorizes {part[4:]} to send mail."})
-        elif part.startswith("ip6:"):
-            rows.append({"tag": "ip6", "value": part[4:], "name": "IPv6 Address", "description": f"Authorizes {part[4:]} to send mail."})
-        elif part.startswith("a") and (part == "a" or part.startswith("a:") or part.startswith("a/")):
-            rows.append({"tag": "a", "value": part, "name": "A Record", "description": SPF_MECHANISM_INFO["a"][1]})
-        elif part.startswith("mx") and (part == "mx" or part.startswith("mx:") or part.startswith("mx/")):
-            rows.append({"tag": "mx", "value": part, "name": "MX Record", "description": SPF_MECHANISM_INFO["mx"][1]})
-        elif part.startswith("ptr"):
+        elif mech.startswith("ip4:"):
+            rows.append({"tag": "ip4", "value": mech[4:], "name": f"IPv4 ({qual_label})", "description": f"Authorizes {mech[4:]} to send mail."})
+        elif mech.startswith("ip6:"):
+            rows.append({"tag": "ip6", "value": mech[4:], "name": f"IPv6 ({qual_label})", "description": f"Authorizes {mech[4:]} to send mail."})
+        elif mech == "a" or mech.startswith("a:") or mech.startswith("a/"):
+            rows.append({"tag": "a", "value": part, "name": f"A Record ({qual_label})", "description": SPF_MECHANISM_INFO["a"][1]})
+        elif mech == "mx" or mech.startswith("mx:") or mech.startswith("mx/"):
+            rows.append({"tag": "mx", "value": part, "name": f"MX Record ({qual_label})", "description": SPF_MECHANISM_INFO["mx"][1]})
+        elif mech.startswith("ptr"):
             rows.append({"tag": "ptr", "value": part, "name": "PTR (Deprecated)", "description": "PTR mechanism is deprecated and should not be used."})
-        elif part.startswith("exists:"):
-            rows.append({"tag": "exists", "value": part[7:], "name": "Exists", "description": SPF_MECHANISM_INFO["exists"][1]})
-        elif part in ("-all", "~all", "+all", "?all"):
-            qualifier = {"-": "Fail", "~": "SoftFail", "+": "Pass", "?": "Neutral"}.get(part[0], "Unknown")
-            rows.append({"tag": "all", "value": part, "name": f"All ({qualifier})", "description": f"Default action for non-matching senders: {qualifier}."})
+        elif mech.startswith("exists:"):
+            rows.append({"tag": "exists", "value": mech[7:], "name": f"Exists ({qual_label})", "description": SPF_MECHANISM_INFO["exists"][1]})
+        elif mech == "all":
+            rows.append({"tag": "all", "value": part, "name": f"All ({qual_label})", "description": f"Default action for non-matching senders: {qual_label}."})
     return rows
 
 
@@ -122,34 +133,36 @@ def _count_spf_lookups(record: str, depth: int = 0, seen: set | None = None) -> 
     parts = record.split()
 
     for part in parts:
-        mechanism = None
-        if part.startswith("include:"):
-            mechanism = part[8:]
+        _, mech = _strip_qualifier(part)
+        resolve_target = None
+
+        if mech.startswith("include:"):
+            resolve_target = mech[8:]
             lookup_count += 1
-        elif part.startswith("redirect="):
-            mechanism = part[9:]
+        elif mech.startswith("redirect="):
+            resolve_target = mech[9:]
             lookup_count += 1
-        elif part.startswith("a") and (part == "a" or part.startswith("a:") or part.startswith("a/")):
+        elif mech == "a" or mech.startswith("a:") or mech.startswith("a/"):
             lookup_count += 1
-        elif part.startswith("mx") and (part == "mx" or part.startswith("mx:") or part.startswith("mx/")):
+        elif mech == "mx" or mech.startswith("mx:") or mech.startswith("mx/"):
             lookup_count += 1
-        elif part.startswith("ptr"):
+        elif mech.startswith("ptr"):
             lookup_count += 1
-        elif part.startswith("exists:"):
+        elif mech.startswith("exists:"):
             lookup_count += 1
 
-        # Recursively resolve includes
-        if mechanism and mechanism not in seen:
-            seen.add(mechanism)
+        # Recursively resolve includes/redirects
+        if resolve_target and resolve_target not in seen:
+            seen.add(resolve_target)
             try:
-                sub_records = _resolve_txt(mechanism)
+                sub_records = _resolve_txt(resolve_target)
                 sub_spf = [r for r in sub_records if r.startswith("v=spf1")]
                 if sub_spf:
                     sub_count, sub_warnings = _count_spf_lookups(sub_spf[0], depth + 1, seen)
                     lookup_count += sub_count
                     warnings.extend(sub_warnings)
             except Exception:
-                warnings.append(f"Could not resolve include: {mechanism}")
+                warnings.append(f"Could not resolve: {resolve_target}")
 
     return lookup_count, warnings
 
@@ -210,17 +223,18 @@ def _check_spf(domain: str) -> dict[str, Any]:
             "result": f"{lookup_count} DNS lookup(s) — within the 10-lookup limit",
         })
 
-    # Test 5: Policy strictness
-    if "-all" in spf:
+    # Test 5: Policy strictness — match as tokens, not substrings
+    spf_tokens = spf.split()
+    if "-all" in spf_tokens:
         result["tests"].append({"test": "SPF 'all' Policy", "pass": True, "result": "Uses strict fail (-all) — recommended"})
         result["grade"] = "A"
-    elif "~all" in spf:
+    elif "~all" in spf_tokens:
         result["tests"].append({"test": "SPF 'all' Policy", "pass": True, "result": "Uses soft fail (~all) — consider upgrading to -all"})
         result["grade"] = "B"
-    elif "+all" in spf:
+    elif "+all" in spf_tokens or "all" in spf_tokens:
         result["tests"].append({"test": "SPF 'all' Policy", "pass": False, "result": "Uses +all — allows ANY server to send as your domain"})
         result["grade"] = "F"
-    elif "?all" in spf:
+    elif "?all" in spf_tokens:
         result["tests"].append({"test": "SPF 'all' Policy", "pass": False, "result": "Uses ?all (neutral) — provides no protection"})
         result["grade"] = "C"
     else:
@@ -228,7 +242,7 @@ def _check_spf(domain: str) -> dict[str, Any]:
         result["grade"] = "C"
 
     # Downgrade for lookup limit breach
-    if lookup_count > 10 and result["grade"] == "A":
+    if lookup_count > 10 and result["grade"] in ("A", "B"):
         result["grade"] = "C"
 
     return result
