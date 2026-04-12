@@ -83,6 +83,40 @@ domain-audit example.com --format csv -o results.csv
 domain-audit example.com --tech-patterns my_patterns.json
 ```
 
+## MCP Server (AI Agent Integration)
+
+domain-audit ships as an MCP (Model Context Protocol) server, allowing AI agents
+to invoke domain scans as tools.
+
+### Claude Desktop
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "domain-audit": {
+      "command": "domain-audit-mcp"
+    }
+  }
+}
+```
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `audit_domain` | Full audit — all or selected scanners |
+| `scan_dns` | DNS records (A, AAAA, MX, NS, TXT, CAA) |
+| `scan_subdomains` | CT log subdomain discovery |
+| `scan_ssl` | Certificate and TLS checks |
+| `scan_headers` | HTTP security headers |
+| `scan_whois` | WHOIS/RDAP lookup |
+| `scan_ports` | Open port detection |
+| `scan_email` | SPF/DKIM/DMARC validation |
+| `scan_tech` | Technology fingerprinting |
+| `list_scanners` | List available scanners |
+
 ### Python API
 
 ```python
