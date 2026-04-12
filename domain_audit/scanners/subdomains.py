@@ -21,12 +21,24 @@ _retry_dns = RetryConfig(max_retries=2, timeout_per_attempt=5.0)
 MAX_SUBDOMAIN_SCAN = 25
 
 
-@with_retry(config=_retry_ct)
 def _query_crtsh(domain: str) -> list[dict[str, Any]]:
+    """Query crt.sh Certificate Transparency logs."""
     resp = requests.get(
         "https://crt.sh/",
         params={"q": f"%.{domain}", "output": "json"},
-        timeout=_retry_ct.timeout_per_attempt,
+        timeout=15.0,
+        headers={"User-Agent": "domain-audit/0.1"},
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _query_certspotter(domain: str) -> list[dict[str, Any]]:
+    """Fallback: query SSLMate's Cert Spotter API."""
+    resp = requests.get(
+        f"https://api.certspotter.com/v1/issuances",
+        params={"domain": domain, "include_subdomains": "true", "expand": "dns_names"},
+        timeout=15.0,
         headers={"User-Agent": "domain-audit/0.1"},
     )
     resp.raise_for_status()
@@ -34,16 +46,53 @@ def _query_crtsh(domain: str) -> list[dict[str, Any]]:
 
 
 def _discover_subdomains(domain: str) -> list[str]:
-    """Discover subdomains via Certificate Transparency logs."""
-    entries = _query_crtsh(domain)
+    """Discover subdomains via CT logs. Tries crt.sh first, falls back to Cert Spotter."""
     subdomains: set[str] = set()
-    for entry in entries:
-        name_value = entry.get("name_value", "")
-        for name in name_value.split("\n"):
-            name = name.strip().lower()
-            if name and not name.startswith("*"):
-                if name.endswith(f".{domain}") or name == domain:
-                    subdomains.add(name)
+
+    # Try crt.sh first
+    try:
+        entries = _query_crtsh(domain)
+        for entry in entries:
+            name_value = entry.get("name_value", "")
+            for name in name_value.split("\n"):
+                name = name.strip().lower()
+                if name and not name.startswith("*"):
+                    if name.endswith(f".{domain}") or name == domain:
+                        subdomains.add(name)
+        if subdomains:
+            return sorted(subdomains)
+    except Exception:
+        pass  # Fall through to backup
+
+    # Fallback: Cert Spotter
+    try:
+        entries = _query_certspotter(domain)
+        for entry in entries:
+            for name in entry.get("dns_names", []):
+                name = name.strip().lower()
+                if name and not name.startswith("*"):
+                    if name.endswith(f".{domain}") or name == domain:
+                        subdomains.add(name)
+        if subdomains:
+            return sorted(subdomains)
+    except Exception:
+        pass
+
+    # If both fail, try basic DNS brute-force with common prefixes
+    common_prefixes = [
+        "www", "mail", "ftp", "smtp", "pop", "imap", "blog", "webmail",
+        "server", "ns1", "ns2", "dns", "dns1", "dns2", "mx", "mx1",
+        "vpn", "admin", "portal", "api", "dev", "staging", "test",
+        "app", "cdn", "cloud", "git", "ssh", "remote", "cpanel",
+    ]
+    for prefix in common_prefixes:
+        sub = f"{prefix}.{domain}"
+        try:
+            dns.resolver.resolve(sub, "A", lifetime=2.0)
+            subdomains.add(sub)
+        except Exception:
+            pass
+
     return sorted(subdomains)
 
 
