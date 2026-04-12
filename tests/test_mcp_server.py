@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from domain_audit.grader import ScanResult
 from domain_audit.mcp_server import list_scanners
@@ -103,3 +103,82 @@ class TestScanSubdomains:
         from domain_audit.mcp_server import scan_subdomains
         result = scan_subdomains(domain="example.com")
         assert result["module"] == "subdomains"
+
+
+class TestAuditDomain:
+    @patch("domain_audit.mcp_server.audit", return_value=type("FakeResult", (), {
+        "to_dict": lambda self: {
+            "domain": "example.com",
+            "overall_grade": "A",
+            "elapsed_seconds": 1.0,
+            "modules": {"ssl": {"module": "ssl", "grade": "A"}},
+            "action_items": [],
+        }
+    })())
+    def test_full_audit_returns_expected_structure(self, mock_audit):
+        from domain_audit.mcp_server import audit_domain
+        result = audit_domain(domain="example.com")
+        assert result["domain"] == "example.com"
+        assert result["overall_grade"] == "A"
+        assert "modules" in result
+        assert "action_items" in result
+        mock_audit.assert_called_once_with(
+            "example.com", only=None, show=False, deep_subdomains=False
+        )
+
+    @patch("domain_audit.mcp_server.audit", return_value=type("FakeResult", (), {
+        "to_dict": lambda self: {
+            "domain": "example.com",
+            "overall_grade": "A",
+            "elapsed_seconds": 1.0,
+            "modules": {"ssl": {"module": "ssl", "grade": "A"}},
+            "action_items": [],
+        }
+    })())
+    def test_scanner_filter_passed_through(self, mock_audit):
+        from domain_audit.mcp_server import audit_domain
+        audit_domain(domain="example.com", scanners=["ssl", "dns"])
+        mock_audit.assert_called_once_with(
+            "example.com", only=["ssl", "dns"], show=False, deep_subdomains=False
+        )
+
+    @patch("domain_audit.mcp_server.audit", return_value=type("FakeResult", (), {
+        "to_dict": lambda self: {"domain": "example.com", "overall_grade": "A",
+                                  "elapsed_seconds": 1.0, "modules": {}, "action_items": []}
+    })())
+    def test_deep_flag_passed_through(self, mock_audit):
+        from domain_audit.mcp_server import audit_domain
+        audit_domain(domain="example.com", deep=True)
+        mock_audit.assert_called_once_with(
+            "example.com", only=None, show=False, deep_subdomains=True
+        )
+
+
+class TestErrorHandling:
+    def test_invalid_domain_returns_error(self):
+        from domain_audit.mcp_server import scan_ssl
+        result = scan_ssl(domain="not a domain!!!")
+        assert "error" in result
+        assert result["module"] == "ssl"
+
+    def test_empty_domain_returns_error(self):
+        from domain_audit.mcp_server import scan_dns
+        result = scan_dns(domain="")
+        assert "error" in result
+
+    @patch("domain_audit.mcp_server.SCANNERS", {
+        "ssl": MagicMock(side_effect=RuntimeError("connection timed out")),
+    })
+    def test_scanner_exception_returns_error(self):
+        from domain_audit.mcp_server import scan_ssl
+        result = scan_ssl(domain="example.com")
+        assert "error" in result
+        assert "connection timed out" in result["error"]
+        assert result["module"] == "ssl"
+
+    @patch("domain_audit.mcp_server.audit", side_effect=RuntimeError("boom"))
+    def test_audit_domain_exception_returns_error(self, mock_audit):
+        from domain_audit.mcp_server import audit_domain
+        result = audit_domain(domain="example.com")
+        assert "error" in result
+        assert result["domain"] == "example.com"
