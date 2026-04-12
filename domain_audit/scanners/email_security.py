@@ -396,6 +396,171 @@ def _check_dkim(domain: str) -> dict[str, Any]:
 
 
 # ═══════════════════════════════════════════════════════════════════
+#  MX DEEP CHECK
+# ═══════════════════════════════════════════════════════════════════
+
+FREE_PROVIDERS = {
+    "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "hotmail.com",
+    "outlook.com", "live.com", "aol.com", "icloud.com", "me.com", "mac.com",
+    "mail.com", "protonmail.com", "proton.me", "zoho.com", "yandex.com",
+    "gmx.com", "gmx.net", "fastmail.com", "tutanota.com", "hey.com",
+}
+
+DISPOSABLE_DOMAINS = {
+    "mailinator.com", "guerrillamail.com", "tempmail.com", "throwaway.email",
+    "yopmail.com", "sharklasers.com", "guerrillamailblock.com", "grr.la",
+    "dispostable.com", "trashmail.com", "10minutemail.com", "getnada.com",
+    "maildrop.cc", "mailnesia.com", "tmpmail.org", "temp-mail.org",
+    "fakeinbox.com", "emailondeck.com", "33mail.com", "mytemp.email",
+}
+
+
+def _smtp_check(mx_host: str, domain: str) -> dict[str, Any]:
+    """Connect to MX host on port 25 and check SMTP banner + RCPT acceptance."""
+    import smtplib
+    result: dict[str, Any] = {
+        "host": mx_host,
+        "reachable": False,
+        "banner": None,
+        "supports_starttls": False,
+        "catch_all": None,
+    }
+
+    try:
+        smtp = smtplib.SMTP(timeout=10)
+        code, banner = smtp.connect(mx_host, 25)
+        result["reachable"] = True
+        result["banner"] = banner.decode(errors="replace")[:200]
+
+        # Check STARTTLS
+        try:
+            smtp.ehlo()
+            if smtp.has_extn("starttls"):
+                result["supports_starttls"] = True
+        except Exception:
+            pass
+
+        # Catch-all detection: try a random address
+        try:
+            smtp.ehlo(domain)
+            smtp.mail(f"test@{domain}")
+            import random
+            import string
+            random_user = "".join(random.choices(string.ascii_lowercase, k=20))
+            code, _ = smtp.rcpt(f"{random_user}@{domain}")
+            result["catch_all"] = code == 250
+        except Exception:
+            result["catch_all"] = None
+
+        smtp.quit()
+    except Exception:
+        pass
+
+    return result
+
+
+def _check_mx(domain: str) -> dict[str, Any]:
+    """Deep MX analysis — hosts, SMTP check, provider detection."""
+    result: dict[str, Any] = {
+        "mx_records": [],
+        "smtp_checks": [],
+        "is_free_provider": False,
+        "is_disposable": False,
+        "provider_name": None,
+        "tests": [],
+        "parsed": [],
+        "grade": "F",
+    }
+
+    # Get MX records
+    try:
+        answers = dns.resolver.resolve(domain, "MX", lifetime=5.0)
+        mx_records = []
+        for rdata in answers:
+            mx_records.append({
+                "priority": rdata.preference,
+                "host": str(rdata.exchange).rstrip("."),
+            })
+        mx_records.sort(key=lambda x: x["priority"])
+        result["mx_records"] = mx_records
+    except Exception:
+        result["tests"].append({"test": "MX Record Exists", "pass": False, "result": "No MX records found — domain cannot receive email"})
+        return result
+
+    if not mx_records:
+        result["tests"].append({"test": "MX Record Exists", "pass": False, "result": "No MX records found"})
+        return result
+
+    result["tests"].append({"test": "MX Record Exists", "pass": True, "result": f"Found {len(mx_records)} MX record(s)"})
+
+    # Parsed table of MX records
+    result["parsed"] = [
+        {"tag": str(mx["priority"]), "value": mx["host"], "name": "Priority", "description": f"Mail server at priority {mx['priority']}"}
+        for mx in mx_records
+    ]
+
+    # Provider detection
+    primary_mx = mx_records[0]["host"].lower()
+    if "google" in primary_mx or "gmail" in primary_mx:
+        result["provider_name"] = "Google Workspace"
+    elif "outlook" in primary_mx or "microsoft" in primary_mx:
+        result["provider_name"] = "Microsoft 365"
+    elif "mimecast" in primary_mx:
+        result["provider_name"] = "Mimecast"
+    elif "proofpoint" in primary_mx or "pphosted" in primary_mx:
+        result["provider_name"] = "Proofpoint"
+    elif "barracuda" in primary_mx:
+        result["provider_name"] = "Barracuda"
+    elif "zoho" in primary_mx:
+        result["provider_name"] = "Zoho Mail"
+
+    if result["provider_name"]:
+        result["tests"].append({"test": "Email Provider", "pass": True, "result": f"Detected: {result['provider_name']}"})
+
+    # Free/disposable checks
+    result["is_free_provider"] = domain.lower() in FREE_PROVIDERS
+    result["is_disposable"] = domain.lower() in DISPOSABLE_DOMAINS
+
+    if result["is_disposable"]:
+        result["tests"].append({"test": "Disposable Domain", "pass": False, "result": "Domain is a known disposable email service"})
+    else:
+        result["tests"].append({"test": "Disposable Domain", "pass": True, "result": "Domain is not a disposable email service"})
+
+    if result["is_free_provider"]:
+        result["tests"].append({"test": "Free Provider", "pass": True, "result": "Domain is a free email provider (Gmail, Yahoo, etc.)"})
+
+    # SMTP check on primary MX
+    primary = mx_records[0]["host"]
+    smtp = _smtp_check(primary, domain)
+    result["smtp_checks"].append(smtp)
+
+    if smtp["reachable"]:
+        result["tests"].append({"test": "SMTP Reachable", "pass": True, "result": f"Primary MX ({primary}) accepts connections on port 25"})
+    else:
+        result["tests"].append({"test": "SMTP Reachable", "pass": False, "result": f"Primary MX ({primary}) not reachable on port 25"})
+
+    if smtp["supports_starttls"]:
+        result["tests"].append({"test": "STARTTLS Support", "pass": True, "result": "Mail server supports STARTTLS encryption"})
+    else:
+        result["tests"].append({"test": "STARTTLS Support", "pass": False, "result": "Mail server does not support STARTTLS — mail sent in cleartext"})
+
+    if smtp["catch_all"] is True:
+        result["tests"].append({"test": "Catch-All Detection", "pass": True, "result": "Domain accepts all addresses (catch-all enabled)"})
+    elif smtp["catch_all"] is False:
+        result["tests"].append({"test": "Catch-All Detection", "pass": True, "result": "Domain rejects unknown addresses (no catch-all)"})
+
+    # Grade
+    if smtp["reachable"] and smtp["supports_starttls"]:
+        result["grade"] = "A"
+    elif smtp["reachable"]:
+        result["grade"] = "B"
+    else:
+        result["grade"] = "C"
+
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════
 #  MAIN SCAN
 # ═══════════════════════════════════════════════════════════════════
 
@@ -460,6 +625,30 @@ def scan(domain: str) -> ScanResult:
         "parsed_record": [],
         "tests": dkim["tests"],
         "record_type": "DKIM",
+        "domain": domain,
+    })
+
+    # ── MX Deep Check ──
+    mx = _check_mx(domain)
+    raw_data["mx"] = mx
+    mx_fix = ""
+    if mx["grade"] == "F":
+        mx_fix = "Add MX records for your domain to receive email"
+    elif mx["grade"] == "B":
+        mx_fix = "Enable STARTTLS on your mail server for encrypted delivery"
+    elif mx["grade"] == "C":
+        mx_fix = "Verify your MX host is reachable on port 25"
+
+    mx_detail = mx["tests"][0]["result"] if mx["tests"] else "No MX records"
+    findings.append({
+        "label": "MX / Mail Server",
+        "value": mx["mx_records"] or "Not found",
+        "grade": mx["grade"],
+        "detail": mx_detail,
+        "fix": mx_fix,
+        "parsed_record": mx["parsed"],
+        "tests": mx["tests"],
+        "record_type": "MX / Mail Server",
         "domain": domain,
     })
 

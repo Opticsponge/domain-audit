@@ -97,8 +97,9 @@ class TestCheckDKIM:
 
 
 class TestEmailScan:
+    @patch("domain_audit.scanners.email_security._check_mx")
     @patch("domain_audit.scanners.email_security._resolve_txt")
-    def test_full_scan_structure(self, mock_resolve):
+    def test_full_scan_structure(self, mock_resolve, mock_mx):
         def resolver(name):
             if name.startswith("_dmarc."):
                 return ["v=DMARC1; p=reject; rua=mailto:a@b.com"]
@@ -109,6 +110,7 @@ class TestEmailScan:
             else:
                 return ["v=spf1 include:_spf.google.com -all"]
         mock_resolve.side_effect = resolver
+        mock_mx.return_value = {"mx_records": [{"priority": 10, "host": "mx.example.com"}], "smtp_checks": [], "is_free_provider": False, "is_disposable": False, "provider_name": None, "tests": [{"test": "MX Record Exists", "pass": True, "result": "Found 1 MX record(s)"}], "parsed": [], "grade": "A"}
 
         result = scan("example.com")
         assert result.module == "email"
