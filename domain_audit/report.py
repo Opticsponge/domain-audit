@@ -220,13 +220,15 @@ def _display_terminal_simple_findings(console, findings: list) -> None:
             t.add_column("HTTPS", min_width=6)
             t.add_column("Status", min_width=6)
             t.add_column("Server", min_width=12)
+            t.add_column("Time", justify="right", min_width=7)
             t.add_column("Redirect", min_width=20)
             for row in table_data:
                 https_style = "green" if row["https"] == "Yes" else "red" if row["reachable"] == "Yes" else "dim"
+                ms = row.get("response_ms", "-")
                 t.add_row(
                     row["subdomain"], row["reachable"],
                     f"[{https_style}]{row['https']}[/{https_style}]",
-                    row["status"], row["server"], row["redirect"],
+                    row["status"], row["server"], ms, row["redirect"],
                 )
             console.print(t)
 
@@ -347,16 +349,19 @@ def _colab_data_table(table_type: str, table_data: list[dict]) -> str:
                 <th style="{ths}">HTTPS</th>
                 <th style="{ths}">Status</th>
                 <th style="{ths}">Server</th>
+                <th style="{ths}">Time</th>
                 <th style="{ths}">Redirect</th>
             </tr>"""
         for row in table_data:
             https_color = "#22c55e" if row["https"] == "Yes" else "#ef4444" if row["reachable"] == "Yes" else "#6b7280"
+            ms = row.get("response_ms", "-")
             html += f"""<tr>
                 <td style="{tds}color:#58a6ff;font-family:monospace;">{row['subdomain']}</td>
                 <td style="{tds}">{row['reachable']}</td>
                 <td style="{tds}color:{https_color};font-weight:bold;">{row['https']}</td>
                 <td style="{tds}">{row['status']}</td>
                 <td style="{tds}">{row['server']}</td>
+                <td style="{tds}text-align:right;">{ms}</td>
                 <td style="{tds}font-size:11px;word-break:break-all;">{row['redirect']}</td>
             </tr>"""
         html += "</table>"

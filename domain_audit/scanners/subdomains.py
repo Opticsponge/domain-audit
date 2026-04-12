@@ -118,13 +118,14 @@ def _probe_ssl(sub: str) -> dict[str, Any]:
 
 
 def _probe_http(sub: str) -> dict[str, Any]:
-    """Quick HTTP check — status code, redirect, server header."""
+    """Quick HTTP check — status code, redirect, server header, response time."""
     data: dict[str, Any] = {
         "reachable": False,
         "status_code": None,
         "redirect": None,
         "server": None,
         "https": False,
+        "response_ms": None,
     }
     # Try HTTPS first, then HTTP
     for scheme in ("https", "http"):
@@ -139,6 +140,7 @@ def _probe_http(sub: str) -> dict[str, Any]:
             data["status_code"] = resp.status_code
             data["server"] = resp.headers.get("Server", None)
             data["https"] = scheme == "https" or resp.url.startswith("https://")
+            data["response_ms"] = round(resp.elapsed.total_seconds() * 1000)
             if resp.url != f"{scheme}://{sub}" and resp.url != f"{scheme}://{sub}/":
                 data["redirect"] = resp.url
             break
@@ -210,17 +212,19 @@ def _build_ssl_table(probes: list[dict]) -> list[dict[str, str]]:
 
 
 def _build_http_table(probes: list[dict]) -> list[dict[str, str]]:
-    """One row per subdomain with HTTP reachability."""
+    """One row per subdomain with HTTP reachability + response time."""
     rows = []
     for p in probes:
         sub = p["subdomain"]
         h = p["http"]
+        ms = h.get("response_ms")
         rows.append({
             "subdomain": sub,
             "reachable": "Yes" if h["reachable"] else "No",
             "https": "Yes" if h["https"] else "No",
             "status": str(h["status_code"]) if h["status_code"] else "-",
             "server": h["server"] or "-",
+            "response_ms": f"{ms}ms" if ms is not None else "-",
             "redirect": h["redirect"] or "-",
         })
     return rows

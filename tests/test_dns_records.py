@@ -3,8 +3,9 @@ from domain_audit.scanners.dns_records import scan
 
 
 class TestDnsScan:
+    @patch("domain_audit.scanners.dns_records._check_zone_transfer")
     @patch("domain_audit.scanners.dns_records._resolve")
-    def test_all_records_found(self, mock_resolve):
+    def test_all_records_found(self, mock_resolve, mock_zt):
         mock_resolve.side_effect = lambda domain, rdtype: {
             "A": ["1.2.3.4"],
             "AAAA": ["::1"],
@@ -14,7 +15,9 @@ class TestDnsScan:
             "CNAME": [],
             "SOA": ["ns1.example.com admin.example.com 1 3600 600 86400 3600"],
             "SRV": [],
+            "CAA": ['0 issue "letsencrypt.org"'],
         }.get(rdtype, [])
+        mock_zt.return_value = {"vulnerable": False, "nameservers_tested": ["ns1.example.com"], "vulnerable_ns": []}
 
         result = scan("example.com")
         assert result.module == "dns"
