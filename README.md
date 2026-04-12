@@ -8,6 +8,7 @@
   </p>
   <p align="center">
     <a href="https://colab.research.google.com/github/Opticsponge/domain-audit/blob/main/notebooks/domain_audit.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"></a>
+    <a href="https://pypi.org/project/domain-audit/"><img src="https://img.shields.io/pypi/v/domain-audit?color=blue" alt="PyPI"></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
     <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.9+-blue.svg" alt="Python 3.9+"></a>
     <a href="https://github.com/Opticsponge/domain-audit/issues"><img src="https://img.shields.io/github/issues/Opticsponge/domain-audit" alt="GitHub Issues"></a>
@@ -47,6 +48,12 @@ Scan any domain and get an instant health report with **A-F grades** and **actio
 Click the badge, enter a domain, run. That's it.
 
 ### Install locally
+
+```bash
+pip install domain-audit
+```
+
+Or install from source (latest development version):
 
 ```bash
 pip install git+https://github.com/Opticsponge/domain-audit.git
@@ -186,10 +193,97 @@ domain_audit/
 
 Contributions welcome! Each scanner is an independent module — easy to add new ones or improve existing checks.
 
-1. Fork the repo
-2. Create a feature branch (`git checkout -b feature/new-scanner`)
-3. Add tests for your changes
-4. Submit a PR
+### Getting Started
+
+```bash
+# 1. Fork on GitHub, then clone your fork
+git clone https://github.com/YOUR_USERNAME/domain-audit.git
+cd domain-audit
+
+# 2. Set up development environment
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+
+# 3. Run tests
+pytest tests/ -v
+
+# 4. Create a feature branch
+git checkout -b feature/new-scanner
+```
+
+### Using Your Fork in Google Colab
+
+If you want to run your own modified version in Colab instead of the published package:
+
+```python
+# Install from YOUR fork (replace YOUR_USERNAME)
+!pip install git+https://github.com/YOUR_USERNAME/domain-audit.git -q
+
+# Or install a specific branch
+!pip install git+https://github.com/YOUR_USERNAME/domain-audit.git@feature/my-branch -q
+
+# Or clone and install in editable mode (for live editing in Colab)
+!git clone https://github.com/YOUR_USERNAME/domain-audit.git /content/domain-audit
+!pip install -e /content/domain-audit -q
+```
+
+### Keeping Your Fork in Sync
+
+```bash
+# Add upstream remote (one-time)
+git remote add upstream https://github.com/Opticsponge/domain-audit.git
+
+# Fetch and merge upstream changes
+git fetch upstream
+git merge upstream/main
+
+# Push updated main to your fork
+git push origin main
+```
+
+### Submitting Changes
+
+1. Push your feature branch to your fork
+2. Open a PR against `Opticsponge/domain-audit:main`
+3. Include tests for new scanners or changed behavior
+
+### Releasing a New Version (maintainers only)
+
+Releases are automated via GitHub Actions using [Trusted Publishers](https://docs.pypi.org/trusted-publishers/) (no API tokens needed).
+
+**One-time setup:**
+
+1. Create accounts on [PyPI](https://pypi.org) and [TestPyPI](https://test.pypi.org)
+2. On each, go to "Publishing" and add a Trusted Publisher:
+   - Owner: `Opticsponge`
+   - Repository: `domain-audit`
+   - Workflow: `publish.yml`
+   - Environment: `pypi` (or `testpypi` for TestPyPI)
+3. In your GitHub repo, create two environments under Settings > Environments:
+   - `testpypi`
+   - `pypi` (optionally add required reviewers for extra safety)
+
+**To release:**
+
+1. Bump version in `pyproject.toml`
+2. Update `CHANGELOG.md`
+3. Commit, push, and create a GitHub Release with tag `v0.X.0`
+4. The publish workflow automatically: builds, uploads to TestPyPI, then uploads to PyPI
+
+**First-time manual upload (if not using Trusted Publishers yet):**
+
+```bash
+pip install build twine
+python -m build
+
+# Test on TestPyPI first
+python -m twine upload --repository testpypi dist/*
+
+# Verify: pip install -i https://test.pypi.org/simple/ domain-audit
+
+# Then upload to real PyPI
+python -m twine upload dist/*
+```
 
 ## License
 

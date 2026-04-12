@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from domain_audit.grader import ScanResult
+from domain_audit.validators import validate_resolved_ip, PrivateIPError, safe_error
 
 COMMON_PORTS = {
     21: "FTP",
@@ -54,7 +55,24 @@ def scan(domain: str) -> ScanResult:
     # Resolve domain to IP first
     try:
         ip = socket.gethostbyname(domain)
+        validate_resolved_ip(ip, domain)
         raw_data["resolved_ip"] = ip
+    except PrivateIPError as exc:
+        return ScanResult(
+            module="ports",
+            status="error",
+            grade="?",
+            findings=[{
+                "label": "Port scan",
+                "value": "Blocked",
+                "grade": "?",
+                "detail": str(exc),
+                "fix": "Only publicly-routable domains can be scanned",
+            }],
+            raw_data={"error": str(exc)},
+            elapsed=time.time() - start,
+            retries=0,
+        )
     except socket.gaierror as exc:
         return ScanResult(
             module="ports",
@@ -62,12 +80,12 @@ def scan(domain: str) -> ScanResult:
             grade="?",
             findings=[{
                 "label": "Port scan",
-                "value": f"Error: {exc}",
+                "value": f"Error: {safe_error(exc)}",
                 "grade": "?",
-                "detail": f"Could not resolve domain: {exc}",
+                "detail": f"Could not resolve domain: {safe_error(exc)}",
                 "fix": "Verify domain has a valid A record",
             }],
-            raw_data={"error": str(exc)},
+            raw_data={"error": safe_error(exc)},
             elapsed=time.time() - start,
             retries=0,
         )

@@ -7,6 +7,7 @@ from typing import Any
 
 from domain_audit.grader import ScanResult, compute_overall_grade, generate_action_items
 from domain_audit.scanners import SCANNERS
+from domain_audit.validators import safe_error
 
 
 class AuditResult:
@@ -109,12 +110,12 @@ def audit(
                     grade="?",
                     findings=[{
                         "label": f"{name} scanner",
-                        "value": f"Unexpected error: {exc}",
+                        "value": f"Unexpected error: {safe_error(exc)}",
                         "grade": "?",
-                        "detail": str(exc),
+                        "detail": safe_error(exc),
                         "fix": "",
                     }],
-                    raw_data={"error": str(exc)},
+                    raw_data={"error": safe_error(exc)},
                 )
 
     overall_grade = compute_overall_grade(results)

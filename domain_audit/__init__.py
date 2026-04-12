@@ -1,7 +1,13 @@
 """domain-audit: Comprehensive domain health auditing tool."""
 
+from importlib.metadata import version, PackageNotFoundError
+
 from domain_audit.core import audit, AuditResult
 from domain_audit.grader import ScanResult
 
-__version__ = "0.1.0"
-__all__ = ["audit", "AuditResult", "ScanResult"]
+try:
+    __version__ = version("domain-audit")
+except PackageNotFoundError:
+    __version__ = "0.0.0-dev"
+
+__all__ = ["audit", "AuditResult", "ScanResult", "__version__"]

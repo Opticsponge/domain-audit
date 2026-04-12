@@ -8,6 +8,7 @@ import requests
 
 from domain_audit.grader import ScanResult
 from domain_audit.retry import RetryConfig, with_retry
+from domain_audit.validators import safe_error
 
 _retry = RetryConfig(max_retries=2, timeout_per_attempt=10.0)
 
@@ -127,12 +128,12 @@ def scan(domain: str) -> ScanResult:
             grade="?",
             findings=[{
                 "label": "Technology detection",
-                "value": f"Error: {exc}",
+                "value": f"Error: {safe_error(exc)}",
                 "grade": "?",
-                "detail": f"Could not detect technologies: {exc}",
+                "detail": f"Could not detect technologies: {safe_error(exc)}",
                 "fix": "",
             }],
-            raw_data={"error": str(exc)},
+            raw_data={"error": safe_error(exc)},
             elapsed=time.time() - start,
             retries=0,
         )

@@ -13,6 +13,7 @@ import requests
 
 from domain_audit.grader import ScanResult
 from domain_audit.retry import RetryConfig, with_retry
+from domain_audit.validators import is_private_ip, safe_error
 
 _retry_ct = RetryConfig(max_retries=3, base_delay=2.0, timeout_per_attempt=15.0)
 _retry_dns = RetryConfig(max_retries=2, timeout_per_attempt=5.0)
@@ -143,6 +144,11 @@ def _probe_ssl(sub: str) -> dict[str, Any]:
         "error": None,
     }
     try:
+        # Resolve first to reject private IPs
+        resolved_ip = socket.gethostbyname(sub)
+        if is_private_ip(resolved_ip):
+            data["error"] = "Skipped: resolves to private/reserved IP"
+            return data
         ctx = ssl.create_default_context()
         with ctx.wrap_socket(socket.socket(), server_hostname=sub) as sock:
             sock.settimeout(5.0)
@@ -184,6 +190,15 @@ def _probe_http(sub: str) -> dict[str, Any]:
         "https": False,
         "response_ms": None,
     }
+    # Skip subdomains that resolve to private IPs
+    try:
+        resolved_ip = socket.gethostbyname(sub)
+        if is_private_ip(resolved_ip):
+            data["error"] = "Skipped: resolves to private/reserved IP"
+            return data
+    except socket.gaierror:
+        return data
+
     # Try HTTPS first, then HTTP
     for scheme in ("https", "http"):
         try:
@@ -429,12 +444,12 @@ def scan(domain: str, deep: bool = False) -> ScanResult:
             grade="C",
             findings=[{
                 "label": "Subdomain discovery failed",
-                "value": f"Error: {exc}",
+                "value": f"Error: {safe_error(exc)}",
                 "grade": "C",
-                "detail": f"Could not discover subdomains — all CT log sources failed: {exc}",
+                "detail": f"Could not discover subdomains — all CT log sources failed: {safe_error(exc)}",
                 "fix": "Subdomain enumeration is incomplete. Try again or check network connectivity. CT log services (crt.sh, Cert Spotter) may be rate-limiting this IP.",
             }],
-            raw_data={"error": str(exc)},
+            raw_data={"error": safe_error(exc)},
             elapsed=time.time() - start,
             retries=0,
         )

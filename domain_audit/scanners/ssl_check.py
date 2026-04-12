@@ -8,6 +8,7 @@ from typing import Any
 
 from domain_audit.grader import ScanResult, worst_grade
 from domain_audit.retry import RetryConfig, with_retry
+from domain_audit.validators import safe_error
 
 _retry = RetryConfig(max_retries=3, timeout_per_attempt=10.0)
 
@@ -136,12 +137,12 @@ def scan(domain: str) -> ScanResult:
             grade="?",
             findings=[{
                 "label": "SSL/TLS connection",
-                "value": f"Error: {exc}",
+                "value": f"Error: {safe_error(exc)}",
                 "grade": "?",
-                "detail": f"Could not establish SSL connection: {exc}",
+                "detail": f"Could not establish SSL connection: {safe_error(exc)}",
                 "fix": "Verify the domain has SSL/TLS enabled on port 443",
             }],
-            raw_data={"error": str(exc)},
+            raw_data={"error": safe_error(exc)},
             elapsed=time.time() - start,
             retries=retries,
         )

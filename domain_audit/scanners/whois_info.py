@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import urllib.parse
 from datetime import datetime, timezone
 from typing import Any
 
@@ -8,6 +9,7 @@ import whois
 
 from domain_audit.grader import ScanResult, worst_grade
 from domain_audit.retry import RetryConfig, with_retry
+from domain_audit.validators import safe_error
 
 _retry = RetryConfig(max_retries=3, timeout_per_attempt=10.0)
 
@@ -34,8 +36,8 @@ def _rdap_lookup(domain: str) -> dict[str, Any]:
     if not rdap_url:
         raise ValueError(f"No RDAP server found for TLD .{tld}")
 
-    # Step 2: Query RDAP
-    url = f"{rdap_url.rstrip('/')}/domain/{domain}"
+    # Step 2: Query RDAP (URL-encode domain to prevent path traversal)
+    url = f"{rdap_url.rstrip('/')}/domain/{urllib.parse.quote(domain, safe='')}"
     resp = requests.get(url, timeout=10.0, headers={"Accept": "application/rdap+json"})
     resp.raise_for_status()
     data = resp.json()
@@ -369,12 +371,12 @@ def scan(domain: str) -> ScanResult:
             grade="?",
             findings=[{
                 "label": "WHOIS lookup",
-                "value": f"Error: {exc}",
+                "value": f"Error: {safe_error(exc)}",
                 "grade": "?",
-                "detail": f"WHOIS lookup failed: {exc}",
+                "detail": f"WHOIS lookup failed: {safe_error(exc)}",
                 "fix": "Domain may not support WHOIS or the WHOIS server is unreachable",
             }],
-            raw_data={"error": str(exc)},
+            raw_data={"error": safe_error(exc)},
             elapsed=time.time() - start,
             retries=retries,
         )

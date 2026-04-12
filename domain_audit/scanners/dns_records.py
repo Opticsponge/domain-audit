@@ -12,6 +12,7 @@ import dns.rdatatype
 
 from domain_audit.grader import ScanResult, worst_grade
 from domain_audit.retry import RetryConfig, with_retry
+from domain_audit.validators import is_private_ip, safe_error
 
 RECORD_TYPES = ["A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA", "SRV", "CAA"]
 CRITICAL_TYPES = {"A", "NS"}
@@ -97,6 +98,8 @@ DANGEROUS_PORTS = {
 
 def _check_port(ip: str, port: int) -> bool:
     """Quick check if a port is open on an IP."""
+    if is_private_ip(ip):
+        return False
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(2.0)
     try:
@@ -111,6 +114,8 @@ def _check_ips(ips: list[str]) -> list[dict[str, Any]]:
     """Get reverse DNS, geolocation, and dangerous port scan for each IP."""
     import requests
     results = []
+    # Filter out private/reserved IPs before scanning
+    ips = [ip for ip in ips if not is_private_ip(ip)]
     for ip in ips[:5]:  # Limit to 5 IPs
         info: dict[str, Any] = {
             "ip": ip, "reverse_dns": "-", "org": "-",
@@ -125,6 +130,7 @@ def _check_ips(ips: list[str]) -> list[dict[str, Any]]:
             pass
 
         # IP geolocation via ip-api.com (free, no key, 45 req/min)
+        # NOTE: Free tier is HTTP-only; data is non-security-critical (city/country/org)
         try:
             resp = requests.get(
                 f"http://ip-api.com/json/{ip}",
@@ -211,10 +217,10 @@ def scan(domain: str) -> ScanResult:
                     "fix": _fix_suggestion(rdtype) if not found else "",
                 })
         except Exception as exc:
-            raw_data[rdtype] = str(exc)
+            raw_data[rdtype] = safe_error(exc)
             findings.append({
                 "label": f"{rdtype} records",
-                "value": f"Error: {exc}",
+                "value": f"Error: {safe_error(exc)}",
                 "grade": "?",
                 "detail": f"Could not query {rdtype}: {exc}",
                 "fix": "",

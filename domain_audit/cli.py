@@ -39,6 +39,14 @@ def main() -> None:
     # Strip protocol if user passed a URL
     domain = args.domain.replace("https://", "").replace("http://", "").strip("/")
 
+    # Validate domain name
+    from domain_audit.validators import validate_domain, DomainValidationError
+    try:
+        domain = validate_domain(domain)
+    except DomainValidationError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+
     only = args.only.split(",") if args.only else None
 
     from domain_audit.core import audit
