@@ -34,14 +34,29 @@ DANGEROUS_PORTS = {1433, 3306, 3389, 5432, 9200, 9300, 27017, 27018, 27019}
 PORT_TIMEOUT = 3.0
 
 
-def _check_port(host: str, port: int) -> tuple[int, bool]:
+import errno
+
+# Port states
+PORT_OPEN = "open"
+PORT_CLOSED = "closed"
+PORT_FILTERED = "filtered"
+
+
+def _check_port(host: str, port: int) -> tuple[int, str]:
+    """Return (port, state) where state is open/closed/filtered."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(PORT_TIMEOUT)
     try:
         result = sock.connect_ex((host, port))
-        return port, result == 0
-    except (socket.timeout, OSError):
-        return port, False
+        if result == 0:
+            return port, PORT_OPEN
+        if result == errno.ECONNREFUSED:
+            return port, PORT_CLOSED
+        return port, PORT_FILTERED
+    except socket.timeout:
+        return port, PORT_FILTERED
+    except OSError:
+        return port, PORT_CLOSED
     finally:
         sock.close()
 
@@ -55,18 +70,31 @@ def _scan_host(host: str) -> dict[str, Any] | None:
         return None
 
     open_ports: list[dict[str, Any]] = []
+    filtered_count = 0
+    closed_count = 0
+
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = {
             executor.submit(_check_port, host, port): port
             for port in COMMON_PORTS
         }
         for future in as_completed(futures):
-            port, is_open = future.result()
-            if is_open:
+            port, state = future.result()
+            if state == PORT_OPEN:
                 open_ports.append({"port": port, "service": COMMON_PORTS[port]})
+            elif state == PORT_FILTERED:
+                filtered_count += 1
+            else:
+                closed_count += 1
 
     open_ports.sort(key=lambda x: x["port"])
-    return {"host": host, "ip": ip, "open_ports": open_ports}
+    return {
+        "host": host,
+        "ip": ip,
+        "open_ports": open_ports,
+        "filtered_count": filtered_count,
+        "closed_count": closed_count,
+    }
 
 
 def _grade_ports(open_port_numbers: set[int]) -> str:
@@ -172,15 +200,30 @@ def scan(domain: str, subdomains: list[str] | None = None) -> ScanResult:
                 "fix": "Review if these ports need to be publicly accessible",
             })
 
+        filtered = hr.get("filtered_count", 0)
+        closed = hr.get("closed_count", 0)
+
         if hr["open_ports"]:
+            port_summary = "{} open, {} closed, {} filtered".format(
+                len(hr["open_ports"]), closed, filtered,
+            )
             findings.append({
                 "label": f"Open ports — {host_label}",
                 "value": hr["open_ports"],
                 "grade": "-",
-                "detail": "{} port(s): {}".format(
+                "detail": "{} port(s) open: {} ({})".format(
                     len(hr["open_ports"]),
                     ", ".join("{}/{}".format(p["port"], p["service"]) for p in hr["open_ports"]),
+                    port_summary,
                 ),
+                "fix": "",
+            })
+        elif filtered > closed:
+            findings.append({
+                "label": f"Open ports — {host_label}",
+                "value": [],
+                "grade": "-",
+                "detail": f"No open ports — {filtered} filtered (firewall likely blocking probes), {closed} closed",
                 "fix": "",
             })
         else:
@@ -188,7 +231,7 @@ def scan(domain: str, subdomains: list[str] | None = None) -> ScanResult:
                 "label": f"Open ports — {host_label}",
                 "value": [],
                 "grade": "-",
-                "detail": "No common ports appear open (may be filtered)",
+                "detail": f"No open ports — {closed} closed, {filtered} filtered",
                 "fix": "",
             })
 

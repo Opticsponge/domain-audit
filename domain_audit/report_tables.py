@@ -29,6 +29,18 @@ def _grade_host_ports(open_port_numbers: set[int]) -> str:
     return "A"
 
 
+def _port_status_text(open_count: int, closed: int, filtered: int) -> str:
+    """Human-readable port status summary."""
+    parts = []
+    if open_count:
+        parts.append(f"{open_count} open")
+    if closed:
+        parts.append(f"{closed} closed")
+    if filtered:
+        parts.append(f"{filtered} filtered")
+    return ", ".join(parts) or "-"
+
+
 GRADE_ORDER = {"F": 0, "C": 1, "B": 2, "A": 3, "-": 4, "?": 5}
 GRADE_COLORS = {
     "A": "#22c55e", "B": "#eab308", "C": "#f97316", "F": "#ef4444",
@@ -81,13 +93,15 @@ def render_html(result: AuditResult, grade_filter: str = "all") -> str:
         ("Open Ports", "Exposed services", "ports", _build_ports_rows, [
             ("Domain", "domain", True), ("Grade", "grade", False),
             ("Open Ports", "open_ports", False), ("Dangerous", "dangerous", False),
+            ("Status", "status", False),
         ]),
         ("WHOIS", "Domain registration", "whois", _build_whois_rows, [
             ("Domain", "domain", True), ("Grade", "grade", False),
             ("Registrar", "registrar", False), ("Days Left", "days_left", False),
         ]),
         ("Tech Stack", "Detected technologies", "tech", _build_tech_rows, [
-            ("Domain", "domain", True), ("Technologies", "techs", False),
+            ("Domain", "domain", True), ("Category", "category", False),
+            ("Technologies", "techs", False), ("Source", "source", False),
         ]),
     ]
 
@@ -206,10 +220,11 @@ def render_html(result: AuditResult, grade_filter: str = "all") -> str:
     # Box 3: Tech stack summary
     tech_raw = result.results.get("tech", None)
     if tech_raw:
+        from domain_audit.scanners.tech_detect import _TECH_TO_CATEGORY
         techs = tech_raw.raw_data.get("technologies", [])
         tech_items = ""
         for t in techs[:8]:  # Limit to 8 in header
-            cat = _esc(t.get("source", "").split(":")[0] if t.get("source") else "")
+            cat = _esc(_TECH_TO_CATEGORY.get(t.get("name", "").lower(), "Other"))
             name = _esc(t.get("name", ""))
             tech_items += f'<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:12px;"><span style="color:#8b949e;">{cat}</span><span style="font-weight:600;">{name}</span></div>'
         if not techs:
@@ -436,13 +451,17 @@ def _build_ports_rows(result: AuditResult) -> list[dict]:
         # New multi-host format: one row per scanned host
         for hr in host_results:
             open_ports = hr.get("open_ports", [])
+            filtered = hr.get("filtered_count", 0)
+            closed = hr.get("closed_count", 0)
             dangerous = [p for p in open_ports if p["port"] in DANGEROUS_PORTS]
             grade = _grade_host_ports({p["port"] for p in open_ports})
+            status = _port_status_text(len(open_ports), closed, filtered)
             rows.append({
                 "domain": hr["host"],
                 "grade": grade,
                 "open_ports": ", ".join("{}/{}".format(p["port"], p["service"]) for p in open_ports) or "None",
                 "dangerous": ", ".join("{}/{}".format(p["port"], p["service"]) for p in dangerous) or "None",
+                "status": status,
             })
     else:
         # Legacy single-host format (fallback)
@@ -453,6 +472,7 @@ def _build_ports_rows(result: AuditResult) -> list[dict]:
             "grade": r.grade,
             "open_ports": ", ".join("{}/{}".format(p["port"], p["service"]) for p in open_ports) or "None",
             "dangerous": ", ".join("{}/{}".format(p["port"], p["service"]) for p in dangerous) or "None",
+            "status": "-",
         })
 
     rows.sort(key=lambda r: GRADE_ORDER.get(r["grade"], 99))
@@ -475,13 +495,36 @@ def _build_whois_rows(result: AuditResult) -> list[dict]:
 
 def _build_tech_rows(result: AuditResult) -> list[dict]:
     rows = []
-    if "tech" in result.results:
-        raw = result.results["tech"].raw_data
-        techs = raw.get("technologies", [])
+    if "tech" not in result.results:
+        return rows
+
+    raw = result.results["tech"].raw_data
+    techs = raw.get("technologies", [])
+
+    if not techs:
         rows.append({
             "domain": result.domain,
-            "techs": ", ".join(t["name"] for t in techs) if techs else "None detected",
+            "category": "-",
+            "techs": "None detected",
+            "source": "-",
         })
+        return rows
+
+    # Group by category using the scanner's categorization
+    from domain_audit.scanners.tech_detect import _TECH_TO_CATEGORY
+    groups: dict[str, list[dict[str, str]]] = {}
+    for t in techs:
+        cat = _TECH_TO_CATEGORY.get(t["name"].lower(), "Other")
+        groups.setdefault(cat, []).append(t)
+
+    for category, cat_techs in groups.items():
+        rows.append({
+            "domain": result.domain,
+            "category": category,
+            "techs": ", ".join(t["name"] for t in cat_techs),
+            "source": ", ".join(t["source"] for t in cat_techs),
+        })
+
     return rows
 
 
