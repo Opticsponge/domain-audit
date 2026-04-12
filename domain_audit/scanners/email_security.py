@@ -59,6 +59,11 @@ SPF_MECHANISM_INFO = {
 _retry = RetryConfig(max_retries=3, timeout_per_attempt=5.0)
 
 
+class _DnsLookupFailed(Exception):
+    """Raised when DNS lookup fails due to network/timeout, not missing records."""
+    pass
+
+
 @with_retry(config=_retry)
 def _resolve_txt(name: str) -> list[str]:
     try:
@@ -70,9 +75,11 @@ def _resolve_txt(name: str) -> list[str]:
             results.append(txt)
         return results
     except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers):
+        # Legitimate: record doesn't exist
         return []
-    except dns.exception.DNSException:
-        return []
+    except dns.exception.DNSException as exc:
+        # Network/timeout failure — caller should NOT treat as "no record"
+        raise _DnsLookupFailed(f"DNS lookup failed for {name}: {exc}") from exc
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -161,6 +168,8 @@ def _count_spf_lookups(record: str, depth: int = 0, seen: set | None = None) -> 
                     sub_count, sub_warnings = _count_spf_lookups(sub_spf[0], depth + 1, seen)
                     lookup_count += sub_count
                     warnings.extend(sub_warnings)
+            except _DnsLookupFailed:
+                warnings.append(f"DNS lookup failed for {resolve_target} — lookup count may be incomplete")
             except Exception:
                 warnings.append(f"Could not resolve: {resolve_target}")
 
@@ -169,9 +178,6 @@ def _count_spf_lookups(record: str, depth: int = 0, seen: set | None = None) -> 
 
 def _check_spf(domain: str) -> dict[str, Any]:
     """Full SPF analysis with parsed record + validation tests."""
-    txt_records = _resolve_txt(domain)
-    spf_records = [r for r in txt_records if r.startswith("v=spf1")]
-
     result: dict[str, Any] = {
         "raw_record": None,
         "parsed": [],
@@ -180,6 +186,15 @@ def _check_spf(domain: str) -> dict[str, Any]:
         "lookup_count": 0,
         "lookup_warnings": [],
     }
+
+    try:
+        txt_records = _resolve_txt(domain)
+    except _DnsLookupFailed as exc:
+        result["grade"] = "?"
+        result["tests"].append({"test": "SPF Record Published", "pass": False, "result": f"DNS lookup failed — cannot verify SPF ({exc})"})
+        return result
+
+    spf_records = [r for r in txt_records if r.startswith("v=spf1")]
 
     # Test 1: Record published?
     if not spf_records:
@@ -274,15 +289,21 @@ def _parse_dmarc(record: str) -> list[dict[str, str]]:
 
 def _check_dmarc(domain: str) -> dict[str, Any]:
     """Full DMARC analysis with parsed record + validation tests."""
-    dmarc_records = _resolve_txt(f"_dmarc.{domain}")
-    dmarc_found = [r for r in dmarc_records if r.startswith("v=DMARC1")]
-
     result: dict[str, Any] = {
         "raw_record": None,
         "parsed": [],
         "tests": [],
         "grade": "F",
     }
+
+    try:
+        dmarc_records = _resolve_txt(f"_dmarc.{domain}")
+    except _DnsLookupFailed as exc:
+        result["grade"] = "?"
+        result["tests"].append({"test": "DMARC Record Published", "pass": False, "result": f"DNS lookup failed — cannot verify DMARC ({exc})"})
+        return result
+
+    dmarc_found = [r for r in dmarc_records if r.startswith("v=DMARC1")]
 
     # Test 1: Record published?
     if not dmarc_found:
@@ -362,9 +383,14 @@ def _check_dkim(domain: str) -> dict[str, Any]:
     }
 
     found_any = False
+    lookup_failures = 0
     for selector in DKIM_SELECTORS:
         dkim_name = f"{selector}._domainkey.{domain}"
-        records = _resolve_txt(dkim_name)
+        try:
+            records = _resolve_txt(dkim_name)
+        except _DnsLookupFailed:
+            lookup_failures += 1
+            continue
         if records:
             found_any = True
             result["found_selectors"].append({
@@ -385,12 +411,21 @@ def _check_dkim(domain: str) -> dict[str, Any]:
 
         result["grade"] = "A"
     else:
-        result["tests"].append({
-            "test": "DKIM Record Published",
-            "pass": False,
-            "result": f"No DKIM record found (checked {len(DKIM_SELECTORS)} common selectors)",
-        })
-        result["grade"] = "C"
+        if lookup_failures == len(DKIM_SELECTORS):
+            # All lookups failed — network issue, not missing records
+            result["tests"].append({
+                "test": "DKIM Record Published",
+                "pass": False,
+                "result": f"DNS lookups failed for all {len(DKIM_SELECTORS)} selectors — cannot verify DKIM",
+            })
+            result["grade"] = "?"
+        else:
+            result["tests"].append({
+                "test": "DKIM Record Published",
+                "pass": False,
+                "result": f"No DKIM record found (checked {len(DKIM_SELECTORS)} common selectors)",
+            })
+            result["grade"] = "C"
 
     return result
 
@@ -573,14 +608,16 @@ def scan(domain: str) -> ScanResult:
     spf = _check_spf(domain)
     raw_data["spf"] = spf
     spf_fix = ""
-    if spf["grade"] == "F":
+    if spf["grade"] == "?":
+        spf_fix = "DNS lookup failed — retry scan to verify SPF"
+    elif spf["grade"] == "F":
         spf_fix = 'Add a TXT record: v=spf1 include:_spf.google.com -all (adjust for your provider)'
     elif spf["grade"] in ("B", "C"):
         spf_fix = 'Update SPF to use "-all" instead of "~all"'
 
     findings.append({
         "label": "SPF",
-        "value": spf["raw_record"] or "Not found",
+        "value": spf["raw_record"] or ("Lookup failed" if spf["grade"] == "?" else "Not found"),
         "grade": spf["grade"],
         "detail": spf["tests"][-1]["result"] if spf["tests"] else "No SPF record",
         "fix": spf_fix,
@@ -594,14 +631,16 @@ def scan(domain: str) -> ScanResult:
     dmarc = _check_dmarc(domain)
     raw_data["dmarc"] = dmarc
     dmarc_fix = ""
-    if dmarc["grade"] == "F":
+    if dmarc["grade"] == "?":
+        dmarc_fix = "DNS lookup failed — retry scan to verify DMARC"
+    elif dmarc["grade"] == "F":
         dmarc_fix = f"Add TXT record at _dmarc.{domain}: v=DMARC1; p=reject; rua=mailto:dmarc@{domain}"
     elif dmarc["grade"] in ("B", "C"):
         dmarc_fix = "Upgrade DMARC policy to p=reject after monitoring"
 
     findings.append({
         "label": "DMARC",
-        "value": dmarc["raw_record"] or "Not found",
+        "value": dmarc["raw_record"] or ("Lookup failed" if dmarc["grade"] == "?" else "Not found"),
         "grade": dmarc["grade"],
         "detail": dmarc["tests"][-1]["result"] if dmarc["tests"] else "No DMARC record",
         "fix": dmarc_fix,
@@ -614,7 +653,12 @@ def scan(domain: str) -> ScanResult:
     # ── DKIM ──
     dkim = _check_dkim(domain)
     raw_data["dkim"] = dkim
-    dkim_fix = "Configure DKIM signing with your email provider" if dkim["grade"] != "A" else ""
+    if dkim["grade"] == "?":
+        dkim_fix = "DNS lookups failed — retry scan to verify DKIM"
+    elif dkim["grade"] != "A":
+        dkim_fix = "Configure DKIM signing with your email provider"
+    else:
+        dkim_fix = ""
 
     findings.append({
         "label": "DKIM",
