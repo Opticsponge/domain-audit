@@ -7,6 +7,7 @@ from typing import Any
 import requests
 
 from domain_audit.grader import ScanResult
+from domain_audit.rate_limit import throttle
 from domain_audit.retry import RetryConfig, with_retry
 from domain_audit.validators import safe_error
 
@@ -41,6 +42,7 @@ HEADER_TECHS = {
 
 @with_retry(config=_retry)
 def _fetch_page(domain: str) -> tuple[dict[str, str], str]:
+    throttle(f"https://{domain}")
     resp = requests.get(
         f"https://{domain}",
         timeout=_retry.timeout_per_attempt,

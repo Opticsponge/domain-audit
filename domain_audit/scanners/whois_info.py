@@ -8,6 +8,7 @@ from typing import Any
 import whois
 
 from domain_audit.grader import ScanResult, worst_grade
+from domain_audit.rate_limit import throttle
 from domain_audit.retry import RetryConfig, with_retry
 from domain_audit.validators import safe_error
 
@@ -25,6 +26,7 @@ def _rdap_lookup(domain: str) -> dict[str, Any]:
 
     # Step 1: Find the RDAP server for this TLD
     tld = domain.rsplit(".", 1)[-1]
+    throttle("https://data.iana.org/rdap/dns.json")
     bootstrap = requests.get("https://data.iana.org/rdap/dns.json", timeout=10.0).json()
     rdap_url = None
     for entry in bootstrap.get("services", []):
@@ -38,6 +40,7 @@ def _rdap_lookup(domain: str) -> dict[str, Any]:
 
     # Step 2: Query RDAP (URL-encode domain to prevent path traversal)
     url = f"{rdap_url.rstrip('/')}/domain/{urllib.parse.quote(domain, safe='')}"
+    throttle(url)
     resp = requests.get(url, timeout=10.0, headers={"Accept": "application/rdap+json"})
     resp.raise_for_status()
     data = resp.json()

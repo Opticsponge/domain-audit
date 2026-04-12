@@ -6,6 +6,7 @@ from typing import Any
 import requests
 
 from domain_audit.grader import ScanResult
+from domain_audit.rate_limit import throttle
 from domain_audit.retry import RetryConfig, with_retry
 from domain_audit.validators import safe_error
 
@@ -47,6 +48,7 @@ _retry = RetryConfig(max_retries=2, timeout_per_attempt=10.0)
 
 @with_retry(config=_retry)
 def _fetch_headers(domain: str) -> dict[str, str]:
+    throttle(f"https://{domain}")
     resp = requests.get(
         f"https://{domain}",
         timeout=_retry.timeout_per_attempt,
@@ -62,6 +64,7 @@ def _check_redirect_chain(domain: str) -> dict[str, Any]:
     issues: list[str] = []
 
     try:
+        throttle(f"http://{domain}")
         resp = requests.get(
             f"http://{domain}",
             timeout=10.0,
@@ -88,6 +91,7 @@ def _check_redirect_chain(domain: str) -> dict[str, Any]:
             hops += 1
 
             try:
+                throttle(current_url)
                 resp = requests.get(
                     current_url,
                     timeout=10.0,
@@ -146,6 +150,7 @@ def _check_cookies(domain: str) -> dict[str, Any]:
     issues: list[str] = []
 
     try:
+        throttle(f"https://{domain}")
         resp = requests.get(
             f"https://{domain}",
             timeout=10.0,

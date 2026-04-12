@@ -11,6 +11,7 @@ import dns.zone
 import dns.rdatatype
 
 from domain_audit.grader import ScanResult, worst_grade
+from domain_audit.rate_limit import throttle
 from domain_audit.retry import RetryConfig, with_retry
 from domain_audit.validators import is_private_ip, safe_error
 
@@ -132,6 +133,7 @@ def _check_ips(ips: list[str]) -> list[dict[str, Any]]:
         # IP geolocation via ip-api.com (free, no key, 45 req/min)
         # NOTE: Free tier is HTTP-only; data is non-security-critical (city/country/org)
         try:
+            throttle(f"http://ip-api.com/json/{ip}")
             resp = requests.get(
                 f"http://ip-api.com/json/{ip}",
                 params={"fields": "status,country,city,isp,org,as"},

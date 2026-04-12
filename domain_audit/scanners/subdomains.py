@@ -12,6 +12,7 @@ import dns.exception
 import requests
 
 from domain_audit.grader import ScanResult
+from domain_audit.rate_limit import throttle
 from domain_audit.retry import RetryConfig, with_retry
 from domain_audit.validators import is_private_ip, safe_error
 
@@ -24,6 +25,7 @@ MAX_SUBDOMAIN_SCAN = 25
 
 def _query_crtsh(domain: str) -> list[dict[str, Any]]:
     """Query crt.sh Certificate Transparency logs."""
+    throttle("https://crt.sh/")
     resp = requests.get(
         "https://crt.sh/",
         params={"q": f"%.{domain}", "output": "json"},
@@ -36,6 +38,7 @@ def _query_crtsh(domain: str) -> list[dict[str, Any]]:
 
 def _query_certspotter(domain: str) -> list[dict[str, Any]]:
     """Fallback: query SSLMate's Cert Spotter API."""
+    throttle("https://api.certspotter.com/")
     resp = requests.get(
         f"https://api.certspotter.com/v1/issuances",
         params={"domain": domain, "include_subdomains": "true", "expand": "dns_names"},
@@ -202,6 +205,7 @@ def _probe_http(sub: str) -> dict[str, Any]:
     # Try HTTPS first, then HTTP
     for scheme in ("https", "http"):
         try:
+            throttle(f"{scheme}://{sub}")
             resp = requests.get(
                 f"{scheme}://{sub}",
                 timeout=5.0,
