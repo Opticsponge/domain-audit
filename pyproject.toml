@@ -22,7 +22,7 @@ classifiers = [
 ]
 dependencies = [
     "dnspython>=2.4",
-    "requests>=2.28",
+    "requests>=2.28,<2.33",
     "python-whois>=0.9",
     "cryptography>=41.0,<44",
     "rich>=12.4,<14",
