@@ -35,83 +35,52 @@ def render_html(result: AuditResult, grade_filter: str = "all") -> str:
 
     sections = []
 
-    # ── 1. SSL/TLS table ──
-    ssl_rows = _build_ssl_rows(result)
-    if ssl_rows:
-        sections.append(_render_section("SSL / TLS", "Certificate health across all domains", ssl_rows, [
-            ("Domain", "domain", True),
-            ("Grade", "grade", False),
-            ("Valid", "valid", False),
-            ("Issuer", "issuer", False),
-            ("Days Left", "days_left", False),
-            ("Protocol", "protocol", False),
-        ], uid=uid))
+    def _status(module: str) -> str:
+        """Get scan status for a module: success, failed, or not_run."""
+        if module not in result.results:
+            return "not_run"
+        r = result.results[module]
+        return "failed" if r.status == "error" else "success"
 
-    # ── 2. DNS table ──
-    dns_rows = _build_dns_rows(result)
-    if dns_rows:
-        sections.append(_render_section("DNS Records", "Record resolution across all domains", dns_rows, [
-            ("Domain", "domain", True),
-            ("A", "a", False),
-            ("AAAA", "aaaa", False),
-            ("CNAME", "cname", False),
-            ("MX", "mx", False),
-            ("NS", "ns", False),
-        ], uid=uid))
+    # Each section: (title, subtitle, module_key, row_builder, columns)
+    _SECTION_DEFS = [
+        ("SSL / TLS", "Certificate health across all domains", "ssl", _build_ssl_rows, [
+            ("Domain", "domain", True), ("Grade", "grade", False), ("Valid", "valid", False),
+            ("Issuer", "issuer", False), ("Days Left", "days_left", False), ("Protocol", "protocol", False),
+        ]),
+        ("DNS Records", "Record resolution across all domains", "dns", _build_dns_rows, [
+            ("Domain", "domain", True), ("A", "a", False), ("AAAA", "aaaa", False),
+            ("CNAME", "cname", False), ("MX", "mx", False), ("NS", "ns", False),
+        ]),
+        ("HTTP / Headers", "Reachability and security headers", "headers", _build_http_rows, [
+            ("Domain", "domain", True), ("Grade", "grade", False), ("HTTPS", "https", False),
+            ("HSTS", "hsts", False), ("CSP", "csp", False), ("Status", "status", False),
+            ("Server", "server", False), ("Time", "response_ms", False),
+        ]),
+        ("Email Security", "SPF, DKIM, DMARC status", "email", _build_email_rows, [
+            ("Domain", "domain", True), ("Grade", "grade", False), ("SPF", "spf", False),
+            ("DKIM", "dkim", False), ("DMARC", "dmarc", False), ("SPF Lookups", "spf_lookups", False),
+        ]),
+        ("Open Ports", "Exposed services", "ports", _build_ports_rows, [
+            ("Domain", "domain", True), ("Grade", "grade", False),
+            ("Open Ports", "open_ports", False), ("Dangerous", "dangerous", False),
+        ]),
+        ("WHOIS", "Domain registration", "whois", _build_whois_rows, [
+            ("Domain", "domain", True), ("Grade", "grade", False),
+            ("Registrar", "registrar", False), ("Days Left", "days_left", False),
+        ]),
+        ("Tech Stack", "Detected technologies", "tech", _build_tech_rows, [
+            ("Domain", "domain", True), ("Technologies", "techs", False),
+        ]),
+    ]
 
-    # ── 3. HTTP table ──
-    http_rows = _build_http_rows(result)
-    if http_rows:
-        sections.append(_render_section("HTTP / Headers", "Reachability and security headers", http_rows, [
-            ("Domain", "domain", True),
-            ("Grade", "grade", False),
-            ("HTTPS", "https", False),
-            ("HSTS", "hsts", False),
-            ("CSP", "csp", False),
-            ("Status", "status", False),
-            ("Server", "server", False),
-            ("Time", "response_ms", False),
-        ], uid=uid))
-
-    # ── 4. Email Security table ──
-    email_rows = _build_email_rows(result)
-    if email_rows:
-        sections.append(_render_section("Email Security", "SPF, DKIM, DMARC status", email_rows, [
-            ("Domain", "domain", True),
-            ("Grade", "grade", False),
-            ("SPF", "spf", False),
-            ("DKIM", "dkim", False),
-            ("DMARC", "dmarc", False),
-            ("SPF Lookups", "spf_lookups", False),
-        ], uid=uid))
-
-    # ── 5. Open Ports table ──
-    ports_rows = _build_ports_rows(result)
-    if ports_rows:
-        sections.append(_render_section("Open Ports", "Exposed services", ports_rows, [
-            ("Domain", "domain", True),
-            ("Grade", "grade", False),
-            ("Open Ports", "open_ports", False),
-            ("Dangerous", "dangerous", False),
-        ], uid=uid))
-
-    # ── 6. WHOIS table ──
-    whois_rows = _build_whois_rows(result)
-    if whois_rows:
-        sections.append(_render_section("WHOIS", "Domain registration", whois_rows, [
-            ("Domain", "domain", True),
-            ("Grade", "grade", False),
-            ("Registrar", "registrar", False),
-            ("Days Left", "days_left", False),
-        ], uid=uid))
-
-    # ── 7. Tech Stack table ──
-    tech_rows = _build_tech_rows(result)
-    if tech_rows:
-        sections.append(_render_section("Tech Stack", "Detected technologies", tech_rows, [
-            ("Domain", "domain", True),
-            ("Technologies", "techs", False),
-        ], uid=uid))
+    for title, subtitle, module, row_builder, columns in _SECTION_DEFS:
+        status = _status(module)
+        if status == "not_run":
+            continue  # Skip sections for scanners that weren't run
+        rows = row_builder(result)
+        if rows or status == "failed":
+            sections.append(_render_section(title, subtitle, rows, columns, uid=uid, scan_status=status))
 
     # ── Action Items ──
     action_html = _render_actions(result)
@@ -486,8 +455,29 @@ def _build_tech_rows(result: AuditResult) -> list[dict]:
 #  HTML renderers
 # ═══════════════════════════════════════════════════════════════════
 
-def _render_section(title: str, subtitle: str, rows: list[dict], columns: list[tuple[str, str, bool]], uid: str = "") -> str:
+def _scan_status_badge(status: str) -> str:
+    """Return HTML badge for scan status: success, failed, not scanned."""
+    if status == "success":
+        return '<span style="color:#22c55e;font-weight:normal;font-size:12px;margin-left:10px;">scan: success</span>'
+    elif status == "failed":
+        return '<span style="color:#ef4444;font-weight:normal;font-size:12px;margin-left:10px;">scan: failed</span>'
+    else:
+        return '<span style="color:#6b7280;font-weight:normal;font-size:12px;margin-left:10px;">scan: not run</span>'
+
+
+def _render_section(title: str, subtitle: str, rows: list[dict], columns: list[tuple[str, str, bool]], uid: str = "", scan_status: str = "success") -> str:
     """Render one category section with header + table."""
+    badge = _scan_status_badge(scan_status)
+
+    if scan_status == "not_run":
+        return f"""
+        <div style="margin-bottom:24px;opacity:0.5;">
+            <div style="padding:10px 14px;background:#161b22;border-radius:8px;border:1px solid #21262d;">
+                <div style="font-weight:bold;font-size:15px;">{_esc(title)} {badge}</div>
+                <div style="font-size:11px;color:#6b7280;">{_esc(subtitle)}</div>
+            </div>
+        </div>"""
+
     ths = "padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:#8b949e;border-bottom:2px solid #30363d;"
     tds = "padding:6px 10px;font-size:13px;border-bottom:1px solid #21262d;"
 
@@ -519,7 +509,7 @@ def _render_section(title: str, subtitle: str, rows: list[dict], columns: list[t
     return f"""
     <div style="margin-bottom:24px;">
         <div style="padding:10px 14px;background:#161b22;border-radius:8px 8px 0 0;border-bottom:2px solid #30363d;">
-            <div style="font-weight:bold;font-size:15px;">{_esc(title)}</div>
+            <div style="font-weight:bold;font-size:15px;">{_esc(title)} {badge}</div>
             <div style="font-size:11px;color:#8b949e;">{_esc(subtitle)}</div>
         </div>
         <div style="overflow-x:auto;">
