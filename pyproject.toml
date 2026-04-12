@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "domain-audit"
+version = "0.1.0"
+description = "Comprehensive domain health auditing tool — DNS, SSL, WHOIS, headers, ports, email security, and tech detection with actionable grades."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [
+    { name = "domain-audit contributors" },
+]
+keywords = ["dns", "ssl", "security", "domain", "audit", "whois", "dmarc"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: System Administrators",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+    "Topic :: System :: Networking",
+]
+dependencies = [
+    "dnspython>=2.4",
+    "requests>=2.31",
+    "python-whois>=0.9",
+    "cryptography>=41.0",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-mock>=3.0",
+]
+
+[project.scripts]
+domain-audit = "domain_audit.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["domain_audit*"]
