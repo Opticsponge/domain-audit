@@ -157,7 +157,7 @@ def render_html(result: AuditResult) -> str:
     """
 
     return f"""
-    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:#010409;color:#e6edf3;padding:24px;border-radius:12px;max-width:900px;" id="{uid}_root">
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:#010409;color:#e6edf3;padding:24px;border-radius:12px;max-width:100%;width:100%;" id="{uid}_root">
         <div style="text-align:center;margin-bottom:28px;">
             <div style="font-size:11px;text-transform:uppercase;letter-spacing:3px;color:#6b7280;">Domain Audit Report</div>
             <div style="font-size:32px;font-weight:bold;margin:8px 0;color:#fff;">{domain}</div>
