@@ -107,35 +107,13 @@ def _display_terminal(result: AuditResult) -> None:
         console.print(f"  [bold {color}]{r.grade}[/bold {color}]  [bold]{domain}[/bold] [dim]>[/dim] [bold]{label}[/bold]")
         console.print(f"  [dim]{'─' * 60}[/dim]")
 
-        # Separate good vs bad findings
-        good = []
-        bad = []
-        for f in r.findings:
-            fg = f.get("grade", "-")
-            if fg in ("A", "-"):
-                good.append(f)
-            else:
-                bad.append(f)
+        # Check if findings have detailed record/test data (email security style)
+        has_detail_tables = any(f.get("tests") for f in r.findings)
 
-        # Bad findings: prominent, with fix inline
-        for f in bad:
-            fg = f.get("grade", "?")
-            fc = GRADE_COLORS.get(fg, "dim")
-            console.print(f"     [{fc}][{fg}][/{fc}]  {f.get('detail', '')}")
-            fix = f.get("fix", "")
-            if fix:
-                console.print(f"         [cyan]Fix:[/cyan] {fix}")
-
-        # Good findings: compact
-        if good and not bad:
-            if len(good) <= 2:
-                for f in good:
-                    console.print(f"     [green]A[/green]  [dim]{f.get('detail', '')}[/dim]")
-            else:
-                console.print(f"     [green]A[/green]  [dim]{good[0].get('detail', '')}[/dim]")
-                console.print(f"         [dim]+ {len(good) - 1} more checks passed[/dim]")
-        elif good and bad:
-            console.print(f"         [dim]{len(good)} other check(s) passed[/dim]")
+        if has_detail_tables:
+            _display_terminal_detailed_findings(console, r.findings, domain, label)
+        else:
+            _display_terminal_simple_findings(console, r.findings)
 
         console.print()
 
@@ -158,6 +136,87 @@ def _display_terminal(result: AuditResult) -> None:
             console.print()
     else:
         console.print(f"  [bold green]No issues found for {domain}[/bold green]")
+        console.print()
+
+
+def _display_terminal_simple_findings(console, findings: list) -> None:
+    """Standard findings display — collapse passing, highlight problems."""
+    good = []
+    bad = []
+    for f in findings:
+        fg = f.get("grade", "-")
+        if fg in ("A", "-"):
+            good.append(f)
+        else:
+            bad.append(f)
+
+    for f in bad:
+        fg = f.get("grade", "?")
+        fc = GRADE_COLORS.get(fg, "dim")
+        console.print(f"     [{fc}][{fg}][/{fc}]  {f.get('detail', '')}")
+        fix = f.get("fix", "")
+        if fix:
+            console.print(f"         [cyan]Fix:[/cyan] {fix}")
+
+    if good and not bad:
+        if len(good) <= 2:
+            for f in good:
+                console.print(f"     [green]A[/green]  [dim]{f.get('detail', '')}[/dim]")
+        else:
+            console.print(f"     [green]A[/green]  [dim]{good[0].get('detail', '')}[/dim]")
+            console.print(f"         [dim]+ {len(good) - 1} more checks passed[/dim]")
+    elif good and bad:
+        console.print(f"         [dim]{len(good)} other check(s) passed[/dim]")
+
+
+def _display_terminal_detailed_findings(console, findings: list, domain: str, module_label: str) -> None:
+    """MXToolbox-style display with parsed record tables + validation tests."""
+    from rich.table import Table
+
+    for f in findings:
+        rec_type = f.get("record_type", f.get("label", ""))
+        fg = f.get("grade", "-")
+        fc = GRADE_COLORS.get(fg, "dim")
+        raw_value = f.get("value", "")
+
+        # Sub-header
+        console.print(f"     [bold]{rec_type}[/bold]  [{fc}]{fg}[/{fc}]  [dim]{domain}[/dim]")
+
+        # Raw record
+        if raw_value and raw_value != "Not found":
+            console.print(f"     [dim]Record:[/dim] {raw_value}")
+
+        # Parsed record table
+        parsed = f.get("parsed_record", [])
+        if parsed:
+            console.print()
+            table = Table(show_header=True, header_style="bold", padding=(0, 1), box=None, pad_edge=False)
+            table.add_column("Tag", style="cyan", min_width=8)
+            table.add_column("Value", min_width=20)
+            table.add_column("Name", style="bold", min_width=12)
+            table.add_column("Description", style="dim", max_width=50)
+            for row in parsed:
+                table.add_row(row["tag"], row["value"], row["name"], row["description"])
+            console.print(table)
+
+        # Validation tests table
+        tests = f.get("tests", [])
+        if tests:
+            console.print()
+            test_table = Table(show_header=True, header_style="bold", padding=(0, 1), box=None, pad_edge=False)
+            test_table.add_column("", min_width=3)
+            test_table.add_column("Test", style="bold", min_width=24)
+            test_table.add_column("Result", min_width=40)
+            for t in tests:
+                icon = "[green]✓[/green]" if t["pass"] else "[red]✗[/red]"
+                test_table.add_row(icon, t["test"], t["result"])
+            console.print(test_table)
+
+        # Fix suggestion
+        fix = f.get("fix", "")
+        if fix:
+            console.print(f"     [cyan]Fix:[/cyan] {fix}")
+
         console.print()
 
 
@@ -223,8 +282,80 @@ def _display_colab(result: AuditResult) -> None:
             fc = GRADE_COLORS_HTML.get(fg, "#6b7280")
             detail = f.get("detail", "")
             fix = f.get("fix", "")
+            parsed = f.get("parsed_record", [])
+            tests = f.get("tests", [])
 
-            if fg in ("A", "-"):
+            # If finding has parsed record + tests, render MXToolbox-style
+            if tests:
+                rec_type = f.get("record_type", f.get("label", ""))
+                raw_val = f.get("value", "")
+
+                findings_html += f"""
+                <div style="margin:8px;padding:12px;background:#161b22;border-radius:8px;border-left:3px solid {fc};">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                        <span style="color:{fc};font-weight:bold;font-size:16px;">{fg}</span>
+                        <span style="font-weight:bold;font-size:14px;">{rec_type}</span>
+                        <span style="color:#8b949e;font-size:12px;">{domain}</span>
+                    </div>"""
+
+                # Raw record
+                if raw_val and raw_val != "Not found":
+                    findings_html += f"""
+                    <div style="padding:6px 10px;background:#0d1117;border-radius:4px;margin-bottom:10px;font-family:monospace;font-size:12px;color:#8b949e;word-break:break-all;">
+                        {raw_val}
+                    </div>"""
+
+                # Parsed record table
+                if parsed:
+                    findings_html += """
+                    <table style="width:100%;border-collapse:collapse;margin-bottom:10px;font-size:12px;">
+                        <tr style="border-bottom:1px solid #30363d;">
+                            <th style="padding:6px 8px;text-align:left;color:#8b949e;width:50px;">Tag</th>
+                            <th style="padding:6px 8px;text-align:left;color:#8b949e;">Value</th>
+                            <th style="padding:6px 8px;text-align:left;color:#8b949e;width:100px;">Name</th>
+                            <th style="padding:6px 8px;text-align:left;color:#8b949e;">Description</th>
+                        </tr>"""
+                    for row in parsed:
+                        val_display = row['value']
+                        if len(val_display) > 60:
+                            val_display = val_display[:57] + "..."
+                        findings_html += f"""
+                        <tr style="border-bottom:1px solid #21262d;">
+                            <td style="padding:5px 8px;color:#58a6ff;font-family:monospace;">{row['tag']}</td>
+                            <td style="padding:5px 8px;font-family:monospace;word-break:break-all;">{val_display}</td>
+                            <td style="padding:5px 8px;font-weight:bold;">{row['name']}</td>
+                            <td style="padding:5px 8px;color:#8b949e;">{row['description']}</td>
+                        </tr>"""
+                    findings_html += "</table>"
+
+                # Validation tests table
+                if tests:
+                    findings_html += """
+                    <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                        <tr style="border-bottom:1px solid #30363d;">
+                            <th style="padding:6px 8px;width:24px;"></th>
+                            <th style="padding:6px 8px;text-align:left;color:#8b949e;">Test</th>
+                            <th style="padding:6px 8px;text-align:left;color:#8b949e;">Result</th>
+                        </tr>"""
+                    for t in tests:
+                        icon = '<span style="color:#22c55e;font-size:14px;">&#10004;</span>' if t["pass"] else '<span style="color:#ef4444;font-size:14px;">&#10008;</span>'
+                        result_color = "#e6edf3" if t["pass"] else "#f87171"
+                        findings_html += f"""
+                        <tr style="border-bottom:1px solid #21262d;background:{'#0d1117' if t['pass'] else '#1a0d0d'};">
+                            <td style="padding:6px 8px;text-align:center;">{icon}</td>
+                            <td style="padding:6px 8px;font-weight:bold;">{t['test']}</td>
+                            <td style="padding:6px 8px;color:{result_color};">{t['result']}</td>
+                        </tr>"""
+                    findings_html += "</table>"
+
+                # Fix
+                if fix:
+                    findings_html += f'<div style="color:#58a6ff;font-size:12px;margin-top:8px;">Fix: {fix}</div>'
+
+                findings_html += "</div>"
+
+            # Standard finding (non-detailed)
+            elif fg in ("A", "-"):
                 findings_html += f"""
                 <div style="padding:6px 14px;color:#8b949e;font-size:13px;display:flex;align-items:baseline;gap:8px;">
                     <span style="color:{fc};font-size:11px;">&#10003;</span>

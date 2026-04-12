@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 from typing import Any
 
@@ -9,7 +10,51 @@ import dns.exception
 from domain_audit.grader import ScanResult
 from domain_audit.retry import RetryConfig, with_retry
 
-DKIM_SELECTORS = ["google", "default", "selector1", "selector2", "dkim", "mail"]
+DKIM_SELECTORS = [
+    "google", "default", "selector1", "selector2", "dkim", "mail",
+    # Common providers
+    "s1", "s2", "k1", "k2", "k3",
+    "mandrill", "mte1", "mte2",                      # Mailchimp/Mandrill
+    "amazonses", "ug7nbtf4gccmlpwj322ax3p6ow6fovbn",  # Amazon SES
+    "sendgrid", "smtpapi", "s1._domainkey", "em",     # SendGrid
+    "pm", "protonmail", "protonmail2", "protonmail3",  # Protonmail
+    "fm1", "fm2", "fm3",                               # Fastmail
+    "mailjet",                                          # Mailjet
+    "smtp", "mailo",                                    # Generic
+    "postmark",                                         # Postmark
+    "turbo-smtp",                                       # Turbo-SMTP
+    "hs1", "hs2",                                       # HubSpot
+    "zendesk1", "zendesk2",                             # Zendesk
+]
+
+# DMARC tag descriptions
+DMARC_TAG_INFO = {
+    "v": ("Version", "Identifies the retrieved as a DMARC record. Must be the first tag."),
+    "p": ("Policy", "Policy to apply to email that fails the DMARC test. Valid values: 'none', 'quarantine', or 'reject'."),
+    "sp": ("Subdomain Policy", "Policy for subdomains. Defaults to the 'p' value if not set."),
+    "rua": ("Receivers", "Addresses to which aggregate feedback is to be sent. Comma separated list of DMARC URIs."),
+    "ruf": ("Forensic Receivers", "Addresses to which message-specific failure information is to be reported."),
+    "fo": ("Forensic Reporting", "Options for generation of failure reports. Valid values: any combination of '01ds' separated by ':'."),
+    "pct": ("Percentage", "Percentage of messages the DMARC policy is applied to. Valid value: integer between 0 and 100."),
+    "adkim": ("DKIM Alignment", "Alignment mode for DKIM. 'r' = relaxed (default), 's' = strict."),
+    "aspf": ("SPF Alignment", "Alignment mode for SPF. 'r' = relaxed (default), 's' = strict."),
+    "rf": ("Report Format", "Format for message-specific failure reports. Default: 'afrf'."),
+    "ri": ("Report Interval", "Interval (seconds) between aggregate reports. Default: 86400 (24 hours)."),
+}
+
+# SPF mechanism descriptions
+SPF_MECHANISM_INFO = {
+    "v": ("Version", "SPF version identifier. Must be 'spf1'."),
+    "include": ("Include", "Authorizes the designated domain's SPF senders."),
+    "a": ("A Record", "Authorizes the domain's A record IP addresses to send mail."),
+    "mx": ("MX Record", "Authorizes the domain's MX hosts to send mail."),
+    "ip4": ("IPv4 Address", "Authorizes the specified IPv4 address or CIDR range to send mail."),
+    "ip6": ("IPv6 Address", "Authorizes the specified IPv6 address or CIDR range to send mail."),
+    "all": ("All", "Matches all senders. Qualifier determines action: '-' fail, '~' softfail, '+' pass, '?' neutral."),
+    "redirect": ("Redirect", "Redirects SPF check to another domain's SPF record."),
+    "exists": ("Exists", "Matches if the specified domain resolves to any address."),
+    "ptr": ("PTR", "Matches if the sender's PTR record resolves within the given domain. Deprecated."),
+}
 
 _retry = RetryConfig(max_retries=3, timeout_per_attempt=5.0)
 
@@ -18,119 +63,386 @@ _retry = RetryConfig(max_retries=3, timeout_per_attempt=5.0)
 def _resolve_txt(name: str) -> list[str]:
     try:
         answers = dns.resolver.resolve(name, "TXT", lifetime=_retry.timeout_per_attempt)
-        return [str(rdata).strip('"') for rdata in answers]
+        # Join multi-part TXT records and strip quotes
+        results = []
+        for rdata in answers:
+            txt = "".join(s.decode() if isinstance(s, bytes) else str(s) for s in rdata.strings)
+            results.append(txt)
+        return results
     except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers):
         return []
     except dns.exception.DNSException:
         return []
 
 
+# ═══════════════════════════════════════════════════════════════════
+#  SPF
+# ═══════════════════════════════════════════════════════════════════
+
+def _parse_spf(record: str) -> list[dict[str, str]]:
+    """Parse SPF record into tag/value table rows."""
+    rows = []
+    parts = record.split()
+    for part in parts:
+        if part.startswith("v="):
+            rows.append({"tag": "v", "value": part[2:], "name": "Version", "description": SPF_MECHANISM_INFO["v"][1]})
+        elif part.startswith("include:"):
+            domain = part[8:]
+            rows.append({"tag": "include", "value": domain, "name": "Include", "description": f"Authorizes senders from {domain}'s SPF policy."})
+        elif part.startswith("redirect="):
+            domain = part[9:]
+            rows.append({"tag": "redirect", "value": domain, "name": "Redirect", "description": f"Redirects SPF evaluation to {domain}."})
+        elif part.startswith("ip4:"):
+            rows.append({"tag": "ip4", "value": part[4:], "name": "IPv4 Address", "description": f"Authorizes {part[4:]} to send mail."})
+        elif part.startswith("ip6:"):
+            rows.append({"tag": "ip6", "value": part[4:], "name": "IPv6 Address", "description": f"Authorizes {part[4:]} to send mail."})
+        elif part.startswith("a") and (part == "a" or part.startswith("a:") or part.startswith("a/")):
+            rows.append({"tag": "a", "value": part, "name": "A Record", "description": SPF_MECHANISM_INFO["a"][1]})
+        elif part.startswith("mx") and (part == "mx" or part.startswith("mx:") or part.startswith("mx/")):
+            rows.append({"tag": "mx", "value": part, "name": "MX Record", "description": SPF_MECHANISM_INFO["mx"][1]})
+        elif part.startswith("ptr"):
+            rows.append({"tag": "ptr", "value": part, "name": "PTR (Deprecated)", "description": "PTR mechanism is deprecated and should not be used."})
+        elif part.startswith("exists:"):
+            rows.append({"tag": "exists", "value": part[7:], "name": "Exists", "description": SPF_MECHANISM_INFO["exists"][1]})
+        elif part in ("-all", "~all", "+all", "?all"):
+            qualifier = {"-": "Fail", "~": "SoftFail", "+": "Pass", "?": "Neutral"}.get(part[0], "Unknown")
+            rows.append({"tag": "all", "value": part, "name": f"All ({qualifier})", "description": f"Default action for non-matching senders: {qualifier}."})
+    return rows
+
+
+def _count_spf_lookups(record: str, depth: int = 0, seen: set | None = None) -> tuple[int, list[str]]:
+    """Recursively count DNS lookups in SPF record. Max 10 allowed by RFC 7208."""
+    if seen is None:
+        seen = set()
+    if depth > 10:
+        return 0, ["Recursion depth exceeded — possible SPF loop"]
+
+    lookup_count = 0
+    warnings = []
+    parts = record.split()
+
+    for part in parts:
+        mechanism = None
+        if part.startswith("include:"):
+            mechanism = part[8:]
+            lookup_count += 1
+        elif part.startswith("redirect="):
+            mechanism = part[9:]
+            lookup_count += 1
+        elif part.startswith("a") and (part == "a" or part.startswith("a:") or part.startswith("a/")):
+            lookup_count += 1
+        elif part.startswith("mx") and (part == "mx" or part.startswith("mx:") or part.startswith("mx/")):
+            lookup_count += 1
+        elif part.startswith("ptr"):
+            lookup_count += 1
+        elif part.startswith("exists:"):
+            lookup_count += 1
+
+        # Recursively resolve includes
+        if mechanism and mechanism not in seen:
+            seen.add(mechanism)
+            try:
+                sub_records = _resolve_txt(mechanism)
+                sub_spf = [r for r in sub_records if r.startswith("v=spf1")]
+                if sub_spf:
+                    sub_count, sub_warnings = _count_spf_lookups(sub_spf[0], depth + 1, seen)
+                    lookup_count += sub_count
+                    warnings.extend(sub_warnings)
+            except Exception:
+                warnings.append(f"Could not resolve include: {mechanism}")
+
+    return lookup_count, warnings
+
+
+def _check_spf(domain: str) -> dict[str, Any]:
+    """Full SPF analysis with parsed record + validation tests."""
+    txt_records = _resolve_txt(domain)
+    spf_records = [r for r in txt_records if r.startswith("v=spf1")]
+
+    result: dict[str, Any] = {
+        "raw_record": None,
+        "parsed": [],
+        "tests": [],
+        "grade": "F",
+        "lookup_count": 0,
+        "lookup_warnings": [],
+    }
+
+    # Test 1: Record published?
+    if not spf_records:
+        result["tests"].append({"test": "SPF Record Published", "pass": False, "result": "No SPF record found"})
+        return result
+
+    spf = spf_records[0]
+    result["raw_record"] = spf
+    result["tests"].append({"test": "SPF Record Published", "pass": True, "result": "SPF record found"})
+
+    # Parse into table
+    result["parsed"] = _parse_spf(spf)
+
+    # Test 2: Syntax valid?
+    if not spf.startswith("v=spf1"):
+        result["tests"].append({"test": "SPF Syntax Check", "pass": False, "result": "Record does not start with v=spf1"})
+    else:
+        result["tests"].append({"test": "SPF Syntax Check", "pass": True, "result": "The record is valid"})
+
+    # Test 3: Multiple records?
+    if len(spf_records) > 1:
+        result["tests"].append({"test": "SPF Multiple Records", "pass": False, "result": f"Found {len(spf_records)} SPF records — only one is allowed"})
+    else:
+        result["tests"].append({"test": "SPF Multiple Records", "pass": True, "result": "Only one SPF record found"})
+
+    # Test 4: Lookup count (<= 10)
+    lookup_count, lookup_warnings = _count_spf_lookups(spf)
+    result["lookup_count"] = lookup_count
+    result["lookup_warnings"] = lookup_warnings
+
+    if lookup_count > 10:
+        result["tests"].append({
+            "test": "SPF Lookup Limit",
+            "pass": False,
+            "result": f"{lookup_count} DNS lookups found — exceeds the 10-lookup limit (RFC 7208). SPF will fail for some receivers.",
+        })
+    else:
+        result["tests"].append({
+            "test": "SPF Lookup Limit",
+            "pass": True,
+            "result": f"{lookup_count} DNS lookup(s) — within the 10-lookup limit",
+        })
+
+    # Test 5: Policy strictness
+    if "-all" in spf:
+        result["tests"].append({"test": "SPF 'all' Policy", "pass": True, "result": "Uses strict fail (-all) — recommended"})
+        result["grade"] = "A"
+    elif "~all" in spf:
+        result["tests"].append({"test": "SPF 'all' Policy", "pass": True, "result": "Uses soft fail (~all) — consider upgrading to -all"})
+        result["grade"] = "B"
+    elif "+all" in spf:
+        result["tests"].append({"test": "SPF 'all' Policy", "pass": False, "result": "Uses +all — allows ANY server to send as your domain"})
+        result["grade"] = "F"
+    elif "?all" in spf:
+        result["tests"].append({"test": "SPF 'all' Policy", "pass": False, "result": "Uses ?all (neutral) — provides no protection"})
+        result["grade"] = "C"
+    else:
+        result["tests"].append({"test": "SPF 'all' Policy", "pass": False, "result": "No 'all' mechanism found — implicit +all"})
+        result["grade"] = "C"
+
+    # Downgrade for lookup limit breach
+    if lookup_count > 10 and result["grade"] == "A":
+        result["grade"] = "C"
+
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  DMARC
+# ═══════════════════════════════════════════════════════════════════
+
+def _parse_dmarc(record: str) -> list[dict[str, str]]:
+    """Parse DMARC record into tag/value table rows."""
+    rows = []
+    # DMARC tags are semicolon-separated
+    tags = [t.strip() for t in record.split(";") if t.strip()]
+    for tag in tags:
+        if "=" in tag:
+            key, _, value = tag.partition("=")
+            key = key.strip()
+            value = value.strip()
+            info = DMARC_TAG_INFO.get(key, (key, f"DMARC tag: {key}"))
+            rows.append({
+                "tag": key,
+                "value": value,
+                "name": info[0],
+                "description": info[1],
+            })
+    return rows
+
+
+def _check_dmarc(domain: str) -> dict[str, Any]:
+    """Full DMARC analysis with parsed record + validation tests."""
+    dmarc_records = _resolve_txt(f"_dmarc.{domain}")
+    dmarc_found = [r for r in dmarc_records if r.startswith("v=DMARC1")]
+
+    result: dict[str, Any] = {
+        "raw_record": None,
+        "parsed": [],
+        "tests": [],
+        "grade": "F",
+    }
+
+    # Test 1: Record published?
+    if not dmarc_found:
+        result["tests"].append({"test": "DMARC Record Published", "pass": False, "result": "No DMARC record found"})
+        return result
+
+    dmarc = dmarc_found[0]
+    result["raw_record"] = dmarc
+    result["tests"].append({"test": "DMARC Record Published", "pass": True, "result": "DMARC record found"})
+
+    # Parse into table
+    result["parsed"] = _parse_dmarc(dmarc)
+
+    # Test 2: Syntax valid?
+    if not dmarc.startswith("v=DMARC1"):
+        result["tests"].append({"test": "DMARC Syntax Check", "pass": False, "result": "Record does not start with v=DMARC1"})
+    else:
+        result["tests"].append({"test": "DMARC Syntax Check", "pass": True, "result": "The record is valid"})
+
+    # Test 3: Multiple records?
+    if len(dmarc_found) > 1:
+        result["tests"].append({"test": "DMARC Multiple Records", "pass": False, "result": f"Found {len(dmarc_found)} DMARC records — only one is allowed"})
+    else:
+        result["tests"].append({"test": "DMARC Multiple Records", "pass": True, "result": "Single DMARC record found"})
+
+    # Test 4: Policy
+    if "p=reject" in dmarc:
+        result["tests"].append({"test": "DMARC Policy Enabled", "pass": True, "result": "DMARC Reject policy enabled"})
+        result["grade"] = "A"
+    elif "p=quarantine" in dmarc:
+        result["tests"].append({"test": "DMARC Policy Enabled", "pass": True, "result": "DMARC Quarantine policy enabled"})
+        result["grade"] = "B"
+    elif "p=none" in dmarc:
+        result["tests"].append({"test": "DMARC Policy Enabled", "pass": False, "result": "DMARC policy is 'none' — monitoring only, not enforcing"})
+        result["grade"] = "C"
+    else:
+        result["tests"].append({"test": "DMARC Policy Enabled", "pass": False, "result": "No policy tag found"})
+        result["grade"] = "C"
+
+    # Test 5: Reporting configured?
+    has_rua = "rua=" in dmarc
+    if has_rua:
+        result["tests"].append({"test": "DMARC Reporting", "pass": True, "result": "Aggregate reporting (rua) is configured"})
+    else:
+        result["tests"].append({"test": "DMARC Reporting", "pass": False, "result": "No aggregate reporting (rua) configured — you won't receive DMARC reports"})
+
+    # Test 6: Percentage
+    pct_match = re.search(r"pct=(\d+)", dmarc)
+    if pct_match:
+        pct = int(pct_match.group(1))
+        if pct == 100:
+            result["tests"].append({"test": "DMARC Percentage", "pass": True, "result": "Policy applies to 100% of messages"})
+        else:
+            result["tests"].append({"test": "DMARC Percentage", "pass": True, "result": f"Policy applies to {pct}% of messages — consider increasing to 100"})
+    else:
+        result["tests"].append({"test": "DMARC Percentage", "pass": True, "result": "No pct tag — defaults to 100%"})
+
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  DKIM
+# ═══════════════════════════════════════════════════════════════════
+
+def _check_dkim(domain: str) -> dict[str, Any]:
+    """DKIM analysis — check multiple selectors."""
+    result: dict[str, Any] = {
+        "found_selectors": [],
+        "checked_selectors": DKIM_SELECTORS,
+        "tests": [],
+        "grade": "C",
+    }
+
+    found_any = False
+    for selector in DKIM_SELECTORS:
+        dkim_name = f"{selector}._domainkey.{domain}"
+        records = _resolve_txt(dkim_name)
+        if records:
+            found_any = True
+            result["found_selectors"].append({
+                "selector": selector,
+                "record": records[0][:120] + "..." if len(records[0]) > 120 else records[0],
+            })
+
+    if found_any:
+        selectors = ", ".join(s["selector"] for s in result["found_selectors"])
+        result["tests"].append({"test": "DKIM Record Published", "pass": True, "result": f"DKIM record(s) found for selector(s): {selectors}"})
+
+        # Check if key looks valid (has p= tag)
+        for s in result["found_selectors"]:
+            if "p=" in s["record"]:
+                result["tests"].append({"test": f"DKIM Key Valid ({s['selector']})", "pass": True, "result": f"Public key found in selector '{s['selector']}'"})
+            else:
+                result["tests"].append({"test": f"DKIM Key Valid ({s['selector']})", "pass": False, "result": f"Selector '{s['selector']}' found but no public key (p=) present"})
+
+        result["grade"] = "A"
+    else:
+        result["tests"].append({
+            "test": "DKIM Record Published",
+            "pass": False,
+            "result": f"No DKIM record found (checked {len(DKIM_SELECTORS)} common selectors)",
+        })
+        result["grade"] = "C"
+
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  MAIN SCAN
+# ═══════════════════════════════════════════════════════════════════
+
 def scan(domain: str) -> ScanResult:
     start = time.time()
     findings = []
     raw_data: dict[str, Any] = {}
 
-    # SPF check
-    txt_records = _resolve_txt(domain)
-    spf_records = [r for r in txt_records if r.startswith("v=spf1")]
-    raw_data["spf"] = spf_records
+    # ── SPF ──
+    spf = _check_spf(domain)
+    raw_data["spf"] = spf
+    spf_fix = ""
+    if spf["grade"] == "F":
+        spf_fix = 'Add a TXT record: v=spf1 include:_spf.google.com -all (adjust for your provider)'
+    elif spf["grade"] in ("B", "C"):
+        spf_fix = 'Update SPF to use "-all" instead of "~all"'
 
-    if spf_records:
-        spf = spf_records[0]
-        has_all_fail = "-all" in spf
-        has_softfail = "~all" in spf
+    findings.append({
+        "label": "SPF",
+        "value": spf["raw_record"] or "Not found",
+        "grade": spf["grade"],
+        "detail": spf["tests"][-1]["result"] if spf["tests"] else "No SPF record",
+        "fix": spf_fix,
+        "parsed_record": spf["parsed"],
+        "tests": spf["tests"],
+        "record_type": "SPF",
+        "domain": domain,
+    })
 
-        if has_all_fail:
-            spf_grade = "A"
-            spf_detail = "SPF record found with strict policy (-all)"
-        elif has_softfail:
-            spf_grade = "B"
-            spf_detail = "SPF record found but uses soft fail (~all) — consider -all"
-        else:
-            spf_grade = "C"
-            spf_detail = "SPF record found but policy is weak"
+    # ── DMARC ──
+    dmarc = _check_dmarc(domain)
+    raw_data["dmarc"] = dmarc
+    dmarc_fix = ""
+    if dmarc["grade"] == "F":
+        dmarc_fix = f"Add TXT record at _dmarc.{domain}: v=DMARC1; p=reject; rua=mailto:dmarc@{domain}"
+    elif dmarc["grade"] in ("B", "C"):
+        dmarc_fix = "Upgrade DMARC policy to p=reject after monitoring"
 
-        findings.append({
-            "label": "SPF record",
-            "value": spf,
-            "grade": spf_grade,
-            "detail": spf_detail,
-            "fix": "" if spf_grade == "A" else 'Update SPF to use "-all" instead of "~all"',
-        })
-    else:
-        findings.append({
-            "label": "SPF record",
-            "value": "Not found",
-            "grade": "F",
-            "detail": "No SPF record — domain is vulnerable to email spoofing",
-            "fix": 'Add a TXT record: v=spf1 include:_spf.google.com -all (adjust for your mail provider)',
-        })
+    findings.append({
+        "label": "DMARC",
+        "value": dmarc["raw_record"] or "Not found",
+        "grade": dmarc["grade"],
+        "detail": dmarc["tests"][-1]["result"] if dmarc["tests"] else "No DMARC record",
+        "fix": dmarc_fix,
+        "parsed_record": dmarc["parsed"],
+        "tests": dmarc["tests"],
+        "record_type": "DMARC",
+        "domain": domain,
+    })
 
-    # DMARC check
-    dmarc_records = _resolve_txt(f"_dmarc.{domain}")
-    dmarc_found = [r for r in dmarc_records if r.startswith("v=DMARC1")]
-    raw_data["dmarc"] = dmarc_found
+    # ── DKIM ──
+    dkim = _check_dkim(domain)
+    raw_data["dkim"] = dkim
+    dkim_fix = "Configure DKIM signing with your email provider" if dkim["grade"] != "A" else ""
 
-    if dmarc_found:
-        dmarc = dmarc_found[0]
-        if "p=reject" in dmarc:
-            dmarc_grade = "A"
-            dmarc_detail = "DMARC record with reject policy — excellent"
-        elif "p=quarantine" in dmarc:
-            dmarc_grade = "B"
-            dmarc_detail = "DMARC record with quarantine policy — consider upgrading to reject"
-        elif "p=none" in dmarc:
-            dmarc_grade = "C"
-            dmarc_detail = "DMARC record with none policy — monitoring only, not enforcing"
-        else:
-            dmarc_grade = "C"
-            dmarc_detail = "DMARC record found but policy unclear"
-
-        findings.append({
-            "label": "DMARC record",
-            "value": dmarc,
-            "grade": dmarc_grade,
-            "detail": dmarc_detail,
-            "fix": "" if dmarc_grade == "A" else "Upgrade DMARC policy to p=reject after monitoring",
-        })
-    else:
-        findings.append({
-            "label": "DMARC record",
-            "value": "Not found",
-            "grade": "F",
-            "detail": "No DMARC record — email authentication not enforced",
-            "fix": 'Add TXT record at _dmarc.{domain}: v=DMARC1; p=reject; rua=mailto:dmarc@{domain}'.replace("{domain}", domain),
-        })
-
-    # DKIM check
-    dkim_found = False
-    dkim_selector = None
-    for selector in DKIM_SELECTORS:
-        dkim_name = f"{selector}._domainkey.{domain}"
-        dkim_records = _resolve_txt(dkim_name)
-        if dkim_records:
-            dkim_found = True
-            dkim_selector = selector
-            raw_data["dkim"] = {"selector": selector, "records": dkim_records}
-            break
-
-    if dkim_found:
-        findings.append({
-            "label": "DKIM record",
-            "value": f"Found (selector: {dkim_selector})",
-            "grade": "A",
-            "detail": f"DKIM record found with selector '{dkim_selector}'",
-            "fix": "",
-        })
-    else:
-        raw_data["dkim"] = {"selectors_checked": DKIM_SELECTORS, "found": False}
-        findings.append({
-            "label": "DKIM record",
-            "value": "Not found",
-            "grade": "C",
-            "detail": f"No DKIM record found (checked selectors: {', '.join(DKIM_SELECTORS)})",
-            "fix": "Configure DKIM signing with your email provider",
-        })
+    findings.append({
+        "label": "DKIM",
+        "value": f"{len(dkim['found_selectors'])} selector(s) found" if dkim["found_selectors"] else "Not found",
+        "grade": dkim["grade"],
+        "detail": dkim["tests"][0]["result"] if dkim["tests"] else "No DKIM record",
+        "fix": dkim_fix,
+        "parsed_record": [],
+        "tests": dkim["tests"],
+        "record_type": "DKIM",
+        "domain": domain,
+    })
 
     grades = [f["grade"] for f in findings if f["grade"] not in ("?", "-")]
     module_grade = _worst_grade(grades) if grades else "?"
