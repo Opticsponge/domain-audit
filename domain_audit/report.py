@@ -101,10 +101,35 @@ def _display_terminal(result: AuditResult) -> None:
     console.print(f"  [bold]{domain}[/bold]  [bold {gc}]{grade}[/bold {gc}]  [dim]{result.elapsed:.1f}s[/dim]")
     console.print()
 
+    # Map check types to subdomain table findings for consolidation
+    sub_tables = {}  # e.g. {"ssl": [...], "dns": [...], "http": [...]}
+    if "subdomains" in result.results:
+        for f in result.results["subdomains"].findings:
+            tt = f.get("table_type")
+            if tt:
+                sub_tables[tt] = f
+
+    # Module -> which subdomain table to append
+    MODULE_TO_TABLE = {"ssl": "ssl", "dns": "dns", "headers": "http"}
+
     # ── Per-module sections ──
     for mod in MODULE_ORDER:
         if mod not in result.results:
             continue
+        # Skip subdomains as standalone — its tables are merged into other modules
+        if mod == "subdomains":
+            # Show discovery summary only (non-table findings)
+            r = result.results[mod]
+            non_table = [f for f in r.findings if not f.get("table_type")]
+            if non_table:
+                color = GRADE_COLORS.get(r.grade, "white")
+                label = MODULE_LABELS.get(mod, mod)
+                console.print(f"  [bold {color}]{r.grade}[/bold {color}]  [bold]{domain}[/bold] [dim]>[/dim] [bold]{label}[/bold]")
+                console.print(f"  [dim]{'─' * 60}[/dim]")
+                _display_terminal_simple_findings(console, non_table)
+                console.print()
+            continue
+
         r = result.results[mod]
         color = GRADE_COLORS.get(r.grade, "white")
         label = MODULE_LABELS.get(mod, mod)
@@ -120,6 +145,13 @@ def _display_terminal(result: AuditResult) -> None:
             _display_terminal_detailed_findings(console, r.findings, domain, label)
         else:
             _display_terminal_simple_findings(console, r.findings)
+
+        # Append matching subdomain table under this module
+        table_key = MODULE_TO_TABLE.get(mod)
+        if table_key and table_key in sub_tables:
+            sub_finding = sub_tables[table_key]
+            console.print(f"     [bold]Subdomains[/bold]")
+            _display_terminal_simple_findings(console, [sub_finding])
 
         console.print()
 
@@ -384,6 +416,16 @@ def _display_colab(result: AuditResult) -> None:
     grade_color = GRADE_COLORS_HTML.get(result.overall_grade, "#6b7280")
     uid = f"da{uuid.uuid4().hex[:8]}"
 
+    # Map check types to subdomain table findings for consolidation
+    sub_tables: dict[str, dict] = {}
+    if "subdomains" in result.results:
+        for f in result.results["subdomains"].findings:
+            tt = f.get("table_type")
+            if tt:
+                sub_tables[tt] = f
+
+    MODULE_TO_TABLE = {"ssl": "ssl", "dns": "dns", "headers": "http"}
+
     # ── Summary table rows ──
     summary_rows = ""
     for mod in MODULE_ORDER:
@@ -543,12 +585,39 @@ def _display_colab(result: AuditResult) -> None:
                     {"<div style='color:#58a6ff;font-size:12px;margin-top:4px;margin-left:24px;'>Fix: " + fix + "</div>" if fix else ""}
                 </div>"""
 
+        # Append matching subdomain table into this module's detail
+        sub_table_html = ""
+        table_key = MODULE_TO_TABLE.get(mod)
+        if table_key and table_key in sub_tables:
+            sf = sub_tables[table_key]
+            sf_detail = _esc(sf.get("detail", ""))
+            sf_label = _esc(sf.get("label", ""))
+            sf_fc = GRADE_COLORS_HTML.get(sf.get("grade", "-"), "#6b7280")
+            sub_table_html = f"""
+            <div style="margin:12px 8px 4px;padding-top:10px;border-top:1px solid #30363d;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                    <span style="font-weight:bold;font-size:13px;">Subdomains &mdash; {sf_label}</span>
+                    <span style="color:#8b949e;font-size:12px;">{sf_detail}</span>
+                </div>
+                {_colab_data_table(table_key, sf.get("table_data", []))}
+            </div>"""
+
+        # For subdomains module, only show non-table findings (discovery summary)
+        if mod == "subdomains":
+            non_table_html = ""
+            for f in r.findings:
+                if not f.get("table_type"):
+                    d = _esc(f.get("detail", ""))
+                    non_table_html += f'<div style="padding:6px 14px;color:#8b949e;font-size:13px;">{d}</div>'
+            findings_html = non_table_html
+
         detail_panels += f"""
         <div id="{uid}_{mod}" style="display:none;background:#0d1117;border:1px solid #21262d;border-top:none;margin:-1px 0 12px 0;border-radius:0 0 8px 8px;padding:10px 4px;">
             <div style="padding:4px 14px 8px;color:#8b949e;font-size:11px;border-bottom:1px solid #21262d;margin-bottom:6px;">
                 {domain} &rsaquo; {label} &mdash; Detail
             </div>
             {findings_html}
+            {sub_table_html}
         </div>"""
 
     # ── Action items ──
