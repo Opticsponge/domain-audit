@@ -100,7 +100,7 @@ results.to_csv("audit.csv")
 | **HTTP Headers** | HSTS, CSP, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy + redirect chain analysis + cookie security flags | A-F |
 | **WHOIS** | Registrar info, domain creation & expiration dates, name servers | A-F |
 | **Email Security** | SPF (parsed tags + chain lookup limit), DKIM (36 selectors), DMARC (parsed tags + policy tests) — MXToolbox-style tables | A-F |
-| **Open Ports** | 16 ports: FTP, SSH, SMTP, HTTP, HTTPS, MSSQL, MySQL, RDP, PostgreSQL, Elasticsearch (9200/9300), MongoDB (27017-27019), 8080, 8443 | A-F |
+| **Open Ports** | 16 ports across main domain + all discovered subdomains: FTP, SSH, SMTP, HTTP, HTTPS, MSSQL, MySQL, RDP, PostgreSQL, Elasticsearch (9200/9300), MongoDB (27017-27019), 8080, 8443 | A-F |
 | **Tech Stack** | Web server, CMS, frameworks via headers, meta tags, and URL patterns | Informational |
 
 ## Grading System
@@ -120,7 +120,7 @@ results.to_csv("audit.csv")
 
 ## Features
 
-- **Parallel scanning** — all 8 modules run concurrently via thread pool
+- **Parallel scanning** — subdomain discovery runs first, then all remaining modules run concurrently via thread pool
 - **Retry with backoff** — exponential backoff + jitter on transient network failures
 - **Per-scanner timeouts** — tuned defaults (3s-15s) so one slow scanner won't block the rest
 - **Per-subdomain probing** — discovered subdomains get DNS, SSL, HTTP scans with data-type-specific tables
@@ -139,7 +139,7 @@ subdomains  CT log discovery + per-subdomain DNS/SSL/HTTP probes with data table
 ssl         SSL/TLS certificate health, expiration, hostname match, protocol check
 headers     Security headers + redirect chain analysis + cookie security flags
 whois       WHOIS registration, domain expiry, name servers
-ports       16-port scan (HTTP, HTTPS, SSH, SMTP, MSSQL, MySQL, RDP, PostgreSQL, Elasticsearch, MongoDB)
+ports       16-port scan across main domain + subdomains (HTTP, HTTPS, SSH, SMTP, MSSQL, MySQL, RDP, PostgreSQL, Elasticsearch, MongoDB)
 email       SPF/DKIM/DMARC with parsed record tables, validation tests, SPF lookup chain counting
 tech        Server, CMS, framework fingerprinting via headers and HTML
 ```
