@@ -4,12 +4,29 @@ from __future__ import annotations
 import html as html_mod
 from typing import Any, TYPE_CHECKING
 
+from domain_audit.scanners.ports import (
+    DANGEROUS_PORTS, EXPECTED_PORTS, ACCEPTABLE_PORTS,
+)
+
 if TYPE_CHECKING:
     from domain_audit.core import AuditResult
 
 
 def _esc(text: str) -> str:
     return html_mod.escape(str(text)) if text else ""
+
+
+def _grade_host_ports(open_port_numbers: set[int]) -> str:
+    """Grade a single host's open ports (mirrors ports scanner logic)."""
+    if open_port_numbers & DANGEROUS_PORTS:
+        return "F"
+    if open_port_numbers - EXPECTED_PORTS - ACCEPTABLE_PORTS - DANGEROUS_PORTS:
+        return "C"
+    if open_port_numbers <= EXPECTED_PORTS:
+        return "A"
+    if open_port_numbers <= EXPECTED_PORTS | ACCEPTABLE_PORTS:
+        return "B"
+    return "A"
 
 
 GRADE_ORDER = {"F": 0, "C": 1, "B": 2, "A": 3, "-": 4, "?": 5}
@@ -408,12 +425,29 @@ def _build_email_rows(result: AuditResult) -> list[dict]:
 
 def _build_ports_rows(result: AuditResult) -> list[dict]:
     rows = []
-    if "ports" in result.results:
-        r = result.results["ports"]
-        raw = r.raw_data
-        open_ports = raw.get("open_ports", [])
-        dangerous = [p for p in open_ports if p["port"] in {1433, 3306, 3389, 5432, 9200, 9300, 27017, 27018, 27019}]
+    if "ports" not in result.results:
+        return rows
 
+    r = result.results["ports"]
+    raw = r.raw_data
+    host_results = raw.get("host_results", [])
+
+    if host_results:
+        # New multi-host format: one row per scanned host
+        for hr in host_results:
+            open_ports = hr.get("open_ports", [])
+            dangerous = [p for p in open_ports if p["port"] in DANGEROUS_PORTS]
+            grade = _grade_host_ports({p["port"] for p in open_ports})
+            rows.append({
+                "domain": hr["host"],
+                "grade": grade,
+                "open_ports": ", ".join("{}/{}".format(p["port"], p["service"]) for p in open_ports) or "None",
+                "dangerous": ", ".join("{}/{}".format(p["port"], p["service"]) for p in dangerous) or "None",
+            })
+    else:
+        # Legacy single-host format (fallback)
+        open_ports = raw.get("open_ports", [])
+        dangerous = [p for p in open_ports if p["port"] in DANGEROUS_PORTS]
         rows.append({
             "domain": result.domain,
             "grade": r.grade,
