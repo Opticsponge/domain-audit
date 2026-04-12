@@ -63,7 +63,7 @@ MODULE_LABELS = {
     "tech": "Tech Stack",
 }
 
-MODULE_ORDER = ["ssl", "dns", "subdomains", "headers", "whois", "email", "ports", "tech"]
+MODULE_ORDER = ["subdomains", "ssl", "dns", "headers", "whois", "email", "ports", "tech"]
 
 
 def _is_colab() -> bool:

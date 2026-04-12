@@ -105,4 +105,4 @@ class TestSubdomainScan:
         mock_discover.side_effect = Exception("CT log down")
         result = scan("example.com")
         assert result.status == "error"
-        assert result.grade == "?"
+        assert result.grade == "C"

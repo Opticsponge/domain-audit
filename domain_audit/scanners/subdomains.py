@@ -425,13 +425,13 @@ def scan(domain: str, deep: bool = False) -> ScanResult:
         return ScanResult(
             module="subdomains",
             status="error",
-            grade="?",
+            grade="C",
             findings=[{
-                "label": "Subdomain discovery",
+                "label": "Subdomain discovery failed",
                 "value": f"Error: {exc}",
-                "grade": "?",
-                "detail": f"CT log query failed: {exc}",
-                "fix": "Check network connectivity or try again later",
+                "grade": "C",
+                "detail": f"Could not discover subdomains — all CT log sources failed: {exc}",
+                "fix": "Subdomain enumeration is incomplete. Try again or check network connectivity. CT log services (crt.sh, Cert Spotter) may be rate-limiting this IP.",
             }],
             raw_data={"error": str(exc)},
             elapsed=time.time() - start,
