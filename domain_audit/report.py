@@ -14,15 +14,6 @@ GRADE_COLORS = {
     "-": "dim",
 }
 
-GRADE_EMOJI = {
-    "A": "[green]PASS[/green]",
-    "B": "[yellow]OK[/yellow]  ",
-    "C": "[dark_orange]WARN[/dark_orange]",
-    "F": "[red]FAIL[/red]",
-    "?": "[dim]ERR [/dim]",
-    "-": "[dim]INFO[/dim]",
-}
-
 GRADE_COLORS_HTML = {
     "A": "#22c55e",
     "B": "#eab308",
@@ -30,6 +21,15 @@ GRADE_COLORS_HTML = {
     "F": "#ef4444",
     "?": "#6b7280",
     "-": "#6b7280",
+}
+
+GRADE_LABEL_HTML = {
+    "A": "PASS",
+    "B": "OK",
+    "C": "WARN",
+    "F": "FAIL",
+    "?": "ERROR",
+    "-": "INFO",
 }
 
 SEVERITY_COLORS = {
@@ -75,111 +75,141 @@ def display(result: AuditResult) -> None:
         _display_terminal(result)
 
 
+# ═══════════════════════════════════════════════════════════════════
+#  TERMINAL (Rich)
+# ═══════════════════════════════════════════════════════════════════
+
 def _display_terminal(result: AuditResult) -> None:
     from rich.console import Console
-    from rich.panel import Panel
     from rich.text import Text
-    from rich.columns import Columns
-    from rich import box
 
     console = Console()
     domain = result.domain
     grade = result.overall_grade
-    grade_color = GRADE_COLORS.get(grade, "white")
+    gc = GRADE_COLORS.get(grade, "white")
 
     # ── Header ──
     console.print()
-    header = Text()
-    header.append("  DOMAIN AUDIT  ", style="bold white on blue")
-    console.print(header)
+    console.print(f"  [bold white on blue]  DOMAIN AUDIT  [/]")
     console.print()
-    console.print(f"  Domain:  [bold]{domain}[/bold]")
-    console.print(f"  Grade:   [bold {grade_color}]{grade}[/bold {grade_color}]")
-    console.print(f"  Time:    [dim]{result.elapsed:.1f}s[/dim]")
-
-    # ── Module Results ──
+    console.print(f"  [bold]{domain}[/bold]  [bold {gc}]{grade}[/bold {gc}]  [dim]{result.elapsed:.1f}s[/dim]")
     console.print()
-    console.print("  [bold]SCAN RESULTS[/bold]")
-    console.print("  [dim]" + "─" * 68 + "[/dim]")
 
+    # ── Per-module sections ──
     for mod in MODULE_ORDER:
         if mod not in result.results:
             continue
         r = result.results[mod]
         color = GRADE_COLORS.get(r.grade, "white")
         label = MODULE_LABELS.get(mod, mod)
-        status_tag = GRADE_EMOJI.get(r.grade, "[dim]???[/dim]")
 
-        # Module header line
-        console.print(f"  {status_tag}  [bold {color}]{r.grade}[/bold {color}]  [bold]{label}[/bold]")
+        # Module header: always includes domain
+        console.print(f"  [bold {color}]{r.grade}[/bold {color}]  [bold]{domain}[/bold] [dim]>[/dim] [bold]{label}[/bold]")
+        console.print(f"  [dim]{'─' * 60}[/dim]")
 
-        # Show findings: collapse passing checks, highlight problems
-        good_findings = []
-        bad_findings = []
-        for finding in r.findings:
-            f_grade = finding.get("grade", "-")
-            detail = finding.get("detail", "")
-            if f_grade in ("A", "-"):
-                good_findings.append(detail)
+        # Separate good vs bad findings
+        good = []
+        bad = []
+        for f in r.findings:
+            fg = f.get("grade", "-")
+            if fg in ("A", "-"):
+                good.append(f)
             else:
-                bad_findings.append((f_grade, detail))
+                bad.append(f)
 
-        # Problems first, prominently
-        for f_grade, detail in bad_findings:
-            f_color = GRADE_COLORS.get(f_grade, "dim")
-            console.print(f"        [{f_color}][{f_grade}] {detail}[/{f_color}]")
+        # Bad findings: prominent, with fix inline
+        for f in bad:
+            fg = f.get("grade", "?")
+            fc = GRADE_COLORS.get(fg, "dim")
+            console.print(f"     [{fc}][{fg}][/{fc}]  {f.get('detail', '')}")
+            fix = f.get("fix", "")
+            if fix:
+                console.print(f"         [cyan]Fix:[/cyan] {fix}")
 
-        # Good findings collapsed into one line if module is passing
-        if good_findings and not bad_findings:
-            # All good — show a compact summary
-            if len(good_findings) <= 2:
-                for detail in good_findings:
-                    console.print(f"        [dim]{detail}[/dim]")
+        # Good findings: compact
+        if good and not bad:
+            if len(good) <= 2:
+                for f in good:
+                    console.print(f"     [green]A[/green]  [dim]{f.get('detail', '')}[/dim]")
             else:
-                console.print(f"        [dim]{good_findings[0]}[/dim]")
-                console.print(f"        [dim]+ {len(good_findings) - 1} more checks passed[/dim]")
-        elif good_findings and bad_findings:
-            # Mixed — just note how many passed
-            console.print(f"        [dim]{len(good_findings)} other check(s) passed[/dim]")
+                console.print(f"     [green]A[/green]  [dim]{good[0].get('detail', '')}[/dim]")
+                console.print(f"         [dim]+ {len(good) - 1} more checks passed[/dim]")
+        elif good and bad:
+            console.print(f"         [dim]{len(good)} other check(s) passed[/dim]")
 
         console.print()
 
     # ── Action Items ──
     if result.action_items:
-        console.print("  [bold]ACTION ITEMS FOR [/bold][bold cyan]{domain}[/bold cyan]".format(domain=domain))
-        console.print("  [dim]" + "─" * 68 + "[/dim]")
+        console.print(f"  [bold white on red]  ACTION ITEMS  [/]  [bold]{domain}[/bold]  [dim]{len(result.action_items)} issue(s)[/dim]")
+        console.print(f"  [dim]{'─' * 60}[/dim]")
+        console.print()
 
         for i, item in enumerate(result.action_items, 1):
             sev = item["severity"]
-            sev_style = SEVERITY_COLORS.get(sev, "dim")
-            module_label = MODULE_LABELS.get(item.get("module", ""), item.get("module", ""))
+            ss = SEVERITY_COLORS.get(sev, "dim")
+            mod_label = MODULE_LABELS.get(item.get("module", ""), item.get("module", ""))
 
-            console.print(
-                f"  [{sev_style}]{sev:8s}[/{sev_style}]  "
-                f"[bold]{item['issue']}[/bold]"
-            )
-            console.print(
-                f"  {'':8s}  [dim]{domain} > {module_label}[/dim]"
-            )
+            console.print(f"  {i:>2}.  [{ss}]{sev}[/{ss}]")
+            console.print(f"       [bold]{item['issue']}[/bold]")
+            console.print(f"       [dim]{domain} > {mod_label}[/dim]")
             if item.get("fix"):
-                console.print(
-                    f"  {'':8s}  [cyan]Fix:[/cyan] {item['fix']}"
-                )
+                console.print(f"       [cyan]Fix:[/cyan] {item['fix']}")
             console.print()
-
     else:
-        console.print(f"  [green bold]No issues found for {domain}[/green bold]")
+        console.print(f"  [bold green]No issues found for {domain}[/bold green]")
         console.print()
 
 
+# ═══════════════════════════════════════════════════════════════════
+#  COLAB (HTML)
+# ═══════════════════════════════════════════════════════════════════
+
 def _display_colab(result: AuditResult) -> None:
+    import random
     from IPython.display import display as ipy_display, HTML
 
     domain = result.domain
     grade_color = GRADE_COLORS_HTML.get(result.overall_grade, "#6b7280")
+    # Unique ID so multiple audits on one page don't collide
+    uid = f"da{random.randint(10000,99999)}"
 
-    # ── Module rows ──
-    module_rows = ""
+    # ── Summary table rows ──
+    summary_rows = ""
+    for mod in MODULE_ORDER:
+        if mod not in result.results:
+            continue
+        r = result.results[mod]
+        color = GRADE_COLORS_HTML.get(r.grade, "#6b7280")
+        label = MODULE_LABELS.get(mod, mod)
+        status_label = GRADE_LABEL_HTML.get(r.grade, "")
+
+        # One-line summary: first problem finding, or first finding
+        summary = ""
+        issue_count = 0
+        for f in r.findings:
+            if f.get("grade", "-") not in ("A", "-"):
+                issue_count += 1
+        if issue_count > 0:
+            summary = f'<span style="color:{color};">{issue_count} issue(s)</span>'
+        else:
+            summary = f'<span style="color:#8b949e;">{r.findings[0].get("detail", "") if r.findings else "OK"}</span>'
+
+        summary_rows += f"""
+        <tr style="cursor:pointer;border-bottom:1px solid #21262d;" onclick="var d=document.getElementById('{uid}_{mod}');d.style.display=d.style.display==='none'?'block':'none';">
+            <td style="padding:10px 14px;">
+                <span style="color:{color};font-weight:bold;font-size:18px;display:inline-block;width:28px;text-align:center;">{r.grade}</span>
+            </td>
+            <td style="padding:10px 8px;">
+                <span style="color:{color};font-size:10px;text-transform:uppercase;letter-spacing:1px;padding:2px 6px;background:{color}15;border-radius:3px;">{status_label}</span>
+            </td>
+            <td style="padding:10px 8px;font-weight:bold;">{domain} &rsaquo; {label}</td>
+            <td style="padding:10px 8px;font-size:13px;">{summary}</td>
+            <td style="padding:10px 8px;color:#484f58;font-size:16px;text-align:center;">&#9662;</td>
+        </tr>"""
+
+    # ── Expandable detail panels (hidden by default) ──
+    detail_panels = ""
     for mod in MODULE_ORDER:
         if mod not in result.results:
             continue
@@ -187,26 +217,34 @@ def _display_colab(result: AuditResult) -> None:
         color = GRADE_COLORS_HTML.get(r.grade, "#6b7280")
         label = MODULE_LABELS.get(mod, mod)
 
-        # Build finding details
         findings_html = ""
-        for finding in r.findings:
-            f_grade = finding.get("grade", "-")
-            f_color = GRADE_COLORS_HTML.get(f_grade, "#6b7280")
-            detail = finding.get("detail", "")
-            fix = finding.get("fix", "")
+        for f in r.findings:
+            fg = f.get("grade", "-")
+            fc = GRADE_COLORS_HTML.get(fg, "#6b7280")
+            detail = f.get("detail", "")
+            fix = f.get("fix", "")
 
-            icon = "&#10003;" if f_grade == "A" else "&#8226;" if f_grade == "-" else "&#10007;"
-            findings_html += f"""
-                <div style="padding:4px 0 4px 20px;color:#ccc;font-size:13px;border-left:2px solid {f_color}33;margin:2px 0;">
-                    <span style="color:{f_color};">{icon}</span> {detail}
-                    {"<br><span style='color:#58a6ff;margin-left:18px;font-size:12px;'>Fix: " + fix + "</span>" if fix else ""}
+            if fg in ("A", "-"):
+                findings_html += f"""
+                <div style="padding:6px 14px;color:#8b949e;font-size:13px;display:flex;align-items:baseline;gap:8px;">
+                    <span style="color:{fc};font-size:11px;">&#10003;</span>
+                    <span>{detail}</span>
+                </div>"""
+            else:
+                findings_html += f"""
+                <div style="padding:8px 14px;margin:4px 8px;background:#161b22;border-left:3px solid {fc};border-radius:0 6px 6px 0;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="color:{fc};font-weight:bold;font-size:12px;">{fg}</span>
+                        <span style="color:#e6edf3;font-size:13px;">{detail}</span>
+                    </div>
+                    <div style="color:#8b949e;font-size:11px;margin-top:3px;margin-left:24px;">{domain} &rsaquo; {label}</div>
+                    {"<div style='color:#58a6ff;font-size:12px;margin-top:4px;margin-left:24px;'>Fix: " + fix + "</div>" if fix else ""}
                 </div>"""
 
-        module_rows += f"""
-        <div style="margin-bottom:12px;padding:12px;background:#161b22;border-radius:8px;border-left:3px solid {color};">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
-                <span style="color:{color};font-weight:bold;font-size:20px;min-width:24px;">{r.grade}</span>
-                <span style="font-weight:bold;font-size:15px;">{label}</span>
+        detail_panels += f"""
+        <div id="{uid}_{mod}" style="display:none;background:#0d1117;border:1px solid #21262d;border-top:none;margin:-1px 0 12px 0;border-radius:0 0 8px 8px;padding:10px 4px;">
+            <div style="padding:4px 14px 8px;color:#8b949e;font-size:11px;border-bottom:1px solid #21262d;margin-bottom:6px;">
+                {domain} &rsaquo; {label} &mdash; Detail
             </div>
             {findings_html}
         </div>"""
@@ -214,42 +252,93 @@ def _display_colab(result: AuditResult) -> None:
     # ── Action items ──
     action_html = ""
     if result.action_items:
-        action_html = f"""
-        <div style="margin-top:20px;">
-            <div style="font-weight:bold;font-size:16px;margin-bottom:10px;color:#fff;">
-                Action Items for <span style="color:#58a6ff;">{domain}</span>
-            </div>"""
-
+        items_html = ""
         for i, item in enumerate(result.action_items, 1):
             sev = item["severity"]
             sev_color = SEVERITY_COLORS_HTML.get(sev, "#6b7280")
-            module_label = MODULE_LABELS.get(item.get("module", ""), item.get("module", ""))
+            mod_label = MODULE_LABELS.get(item.get("module", ""), item.get("module", ""))
             fix = item.get("fix", "")
 
-            action_html += f"""
-            <div style="margin:8px 0;padding:10px 12px;background:#161b22;border-radius:6px;border-left:3px solid {sev_color};">
-                <div>
-                    <span style="color:{sev_color};font-weight:bold;font-size:11px;text-transform:uppercase;letter-spacing:1px;">{sev}</span>
-                    <span style="margin-left:8px;font-weight:bold;">{item['issue']}</span>
+            items_html += f"""
+            <div style="margin:6px 0;padding:10px 12px;background:#0d1117;border:1px solid #21262d;border-left:3px solid {sev_color};border-radius:0 6px 6px 0;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
+                    <span style="color:{sev_color};font-weight:bold;font-size:10px;text-transform:uppercase;letter-spacing:1px;padding:2px 6px;background:{sev_color}18;border-radius:3px;">{sev}</span>
+                    <span style="font-weight:bold;font-size:13px;">{item['issue']}</span>
                 </div>
-                <div style="color:#666;font-size:12px;margin-top:2px;">{domain} &rsaquo; {module_label}</div>
-                {"<div style='color:#58a6ff;font-size:12px;margin-top:4px;'>Fix: " + fix + "</div>" if fix else ""}
+                <div style="color:#8b949e;font-size:12px;margin-left:4px;">{domain} &rsaquo; {mod_label}</div>
+                {"<div style='color:#58a6ff;font-size:12px;margin-top:4px;margin-left:4px;'>Fix: " + fix + "</div>" if fix else ""}
             </div>"""
 
-        action_html += "</div>"
+        action_html = f"""
+        <div style="margin-top:20px;">
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#2d1215;border-radius:8px 8px 0 0;border-bottom:2px solid #ef4444;">
+                <span style="font-size:16px;">&#9888;</span>
+                <div style="flex:1;">
+                    <span style="font-weight:bold;font-size:14px;">Action Items for {domain}</span>
+                    <span style="font-size:11px;color:#f87171;margin-left:8px;">{len(result.action_items)} issue(s)</span>
+                </div>
+            </div>
+            <div style="background:#161b22;border:1px solid #21262d;border-top:none;border-radius:0 0 8px 8px;padding:8px;">
+                {items_html}
+            </div>
+        </div>"""
+
+    # ── JavaScript for expand/collapse ──
+    js = f"""
+    <script>
+    function {uid}_toggleAll() {{
+        var panels = [{', '.join(f"'{uid}_{mod}'" for mod in MODULE_ORDER if mod in result.results)}];
+        var btn = document.getElementById('{uid}_toggleBtn');
+        var expanding = btn.innerText.indexOf('Expand') !== -1;
+        panels.forEach(function(id) {{
+            var el = document.getElementById(id);
+            if (el) el.style.display = expanding ? 'block' : 'none';
+        }});
+        btn.innerText = expanding ? '▲ Collapse All' : '▼ Expand All';
+    }}
+    </script>
+    """
 
     html = f"""
-    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:#0d1117;color:#e6edf3;padding:24px;border-radius:12px;max-width:720px;">
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:#010409;color:#e6edf3;padding:24px;border-radius:12px;max-width:780px;">
         <div style="text-align:center;margin-bottom:24px;">
-            <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#666;">Domain Audit</div>
-            <div style="font-size:28px;font-weight:bold;margin:4px 0;">{domain}</div>
-            <div style="display:inline-block;padding:8px 24px;border-radius:8px;background:{grade_color}22;margin-top:8px;">
-                <span style="font-size:42px;font-weight:bold;color:{grade_color};">{result.overall_grade}</span>
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:3px;color:#6b7280;">Domain Audit Report</div>
+            <div style="font-size:32px;font-weight:bold;margin:8px 0;color:#fff;">{domain}</div>
+            <div style="display:inline-block;padding:10px 32px;border-radius:10px;background:{grade_color}15;border:2px solid {grade_color}40;margin-top:8px;">
+                <div style="font-size:48px;font-weight:bold;color:{grade_color};">{result.overall_grade}</div>
+                <div style="font-size:11px;color:{grade_color};text-transform:uppercase;letter-spacing:2px;">Overall</div>
             </div>
-            <div style="font-size:12px;color:#555;margin-top:8px;">Scanned in {result.elapsed:.1f}s</div>
+            <div style="font-size:12px;color:#484f58;margin-top:12px;">Scanned in {result.elapsed:.1f}s &bull; {len(result.results)} modules &bull; {len(result.action_items)} issue(s)</div>
         </div>
-        {module_rows}
+
+        <!-- Summary Table -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <span style="font-weight:bold;font-size:14px;">Scan Results</span>
+            <span id="{uid}_toggleBtn" onclick="{uid}_toggleAll()" style="cursor:pointer;color:#58a6ff;font-size:12px;padding:4px 10px;border:1px solid #21262d;border-radius:6px;background:#161b22;">&#9660; Expand All</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;background:#161b22;border-radius:8px;overflow:hidden;">
+            <thead>
+                <tr style="border-bottom:2px solid #30363d;">
+                    <th style="padding:8px 14px;text-align:left;font-size:12px;color:#8b949e;width:36px;">Grade</th>
+                    <th style="padding:8px 8px;text-align:left;font-size:12px;color:#8b949e;width:50px;">Status</th>
+                    <th style="padding:8px 8px;text-align:left;font-size:12px;color:#8b949e;">Module</th>
+                    <th style="padding:8px 8px;text-align:left;font-size:12px;color:#8b949e;">Summary</th>
+                    <th style="width:30px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {summary_rows}
+            </tbody>
+        </table>
+
+        <!-- Expandable Detail Panels -->
+        {detail_panels}
+
+        <div style="text-align:center;margin-top:4px;font-size:11px;color:#30363d;">Click a row to expand &bull; Click again to collapse</div>
+
+        <!-- Action Items -->
         {action_html}
     </div>
+    {js}
     """
     ipy_display(HTML(html))
