@@ -140,12 +140,16 @@ def _display_terminal(result: AuditResult) -> None:
 
 
 def _display_terminal_simple_findings(console, findings: list) -> None:
-    """Standard findings display — collapse passing, highlight problems."""
+    """Standard findings display — collapse passing, highlight problems. Renders subdomain tables."""
+    from rich.table import Table
+
     good = []
     bad = []
+    table_findings = []
     for f in findings:
-        fg = f.get("grade", "-")
-        if fg in ("A", "-"):
+        if f.get("table_type"):
+            table_findings.append(f)
+        elif f.get("grade", "-") in ("A", "-"):
             good.append(f)
         else:
             bad.append(f)
@@ -158,15 +162,77 @@ def _display_terminal_simple_findings(console, findings: list) -> None:
         if fix:
             console.print(f"         [cyan]Fix:[/cyan] {fix}")
 
-    if good and not bad:
+    if good and not bad and not table_findings:
         if len(good) <= 2:
             for f in good:
                 console.print(f"     [green]A[/green]  [dim]{f.get('detail', '')}[/dim]")
         else:
             console.print(f"     [green]A[/green]  [dim]{good[0].get('detail', '')}[/dim]")
             console.print(f"         [dim]+ {len(good) - 1} more checks passed[/dim]")
-    elif good and bad:
-        console.print(f"         [dim]{len(good)} other check(s) passed[/dim]")
+    elif good and (bad or table_findings):
+        for f in good:
+            console.print(f"     [dim]{f.get('detail', '')}[/dim]")
+
+    # Render subdomain data tables
+    for f in table_findings:
+        table_type = f["table_type"]
+        table_data = f.get("table_data", [])
+        if not table_data:
+            continue
+
+        fg = f.get("grade", "-")
+        fc = GRADE_COLORS.get(fg, "dim")
+        console.print()
+        console.print(f"     [{fc}]{fg}[/{fc}]  [bold]{f.get('label', '')}[/bold]  [dim]{f.get('detail', '')}[/dim]")
+
+        if table_type == "dns":
+            t = Table(show_header=True, header_style="bold", padding=(0, 1), box=None, pad_edge=False)
+            t.add_column("Subdomain", style="cyan", min_width=30)
+            t.add_column("A Record(s)", min_width=16)
+            t.add_column("AAAA", min_width=8)
+            t.add_column("CNAME", min_width=16)
+            for row in table_data:
+                t.add_row(row["subdomain"], row["a_records"], row["aaaa_records"], row["cname"])
+            console.print(t)
+
+        elif table_type == "ssl":
+            t = Table(show_header=True, header_style="bold", padding=(0, 1), box=None, pad_edge=False)
+            t.add_column("Subdomain", style="cyan", min_width=28)
+            t.add_column("IP", min_width=14)
+            t.add_column("Valid", min_width=6)
+            t.add_column("Issuer", min_width=14)
+            t.add_column("Days Left", justify="right", min_width=9)
+            t.add_column("Protocol", min_width=8)
+            t.add_column("Grade", min_width=5)
+            for row in table_data:
+                gc = GRADE_COLORS.get(row["grade"], "dim")
+                t.add_row(
+                    row["subdomain"], row["ip"], row["valid"],
+                    row["issuer"], row["days_left"], row["protocol"],
+                    f"[{gc}]{row['grade']}[/{gc}]",
+                )
+            console.print(t)
+
+        elif table_type == "http":
+            t = Table(show_header=True, header_style="bold", padding=(0, 1), box=None, pad_edge=False)
+            t.add_column("Subdomain", style="cyan", min_width=28)
+            t.add_column("Reachable", min_width=9)
+            t.add_column("HTTPS", min_width=6)
+            t.add_column("Status", min_width=6)
+            t.add_column("Server", min_width=12)
+            t.add_column("Redirect", min_width=20)
+            for row in table_data:
+                https_style = "green" if row["https"] == "Yes" else "red" if row["reachable"] == "Yes" else "dim"
+                t.add_row(
+                    row["subdomain"], row["reachable"],
+                    f"[{https_style}]{row['https']}[/{https_style}]",
+                    row["status"], row["server"], row["redirect"],
+                )
+            console.print(t)
+
+        fix = f.get("fix", "")
+        if fix:
+            console.print(f"         [cyan]Fix:[/cyan] {fix}")
 
 
 def _display_terminal_detailed_findings(console, findings: list, domain: str, module_label: str) -> None:
@@ -223,6 +289,81 @@ def _display_terminal_detailed_findings(console, findings: list, domain: str, mo
 # ═══════════════════════════════════════════════════════════════════
 #  COLAB (HTML)
 # ═══════════════════════════════════════════════════════════════════
+
+def _colab_data_table(table_type: str, table_data: list[dict]) -> str:
+    """Generate HTML table for subdomain data (DNS, SSL, HTTP)."""
+    ths = "padding:6px 8px;text-align:left;color:#8b949e;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;"
+    tds = "padding:5px 8px;font-size:12px;border-bottom:1px solid #21262d;"
+
+    if table_type == "dns":
+        html = f"""<table style="width:100%;border-collapse:collapse;">
+            <tr style="border-bottom:1px solid #30363d;">
+                <th style="{ths}">Subdomain</th>
+                <th style="{ths}">A Record(s)</th>
+                <th style="{ths}">AAAA</th>
+                <th style="{ths}">CNAME</th>
+            </tr>"""
+        for row in table_data:
+            html += f"""<tr>
+                <td style="{tds}color:#58a6ff;font-family:monospace;">{row['subdomain']}</td>
+                <td style="{tds}font-family:monospace;">{row['a_records']}</td>
+                <td style="{tds}font-family:monospace;">{row['aaaa_records']}</td>
+                <td style="{tds}font-family:monospace;">{row['cname']}</td>
+            </tr>"""
+        html += "</table>"
+        return html
+
+    elif table_type == "ssl":
+        html = f"""<table style="width:100%;border-collapse:collapse;">
+            <tr style="border-bottom:1px solid #30363d;">
+                <th style="{ths}">Subdomain</th>
+                <th style="{ths}">IP</th>
+                <th style="{ths}">Valid</th>
+                <th style="{ths}">Issuer</th>
+                <th style="{ths}">Days Left</th>
+                <th style="{ths}">Protocol</th>
+                <th style="{ths}">Grade</th>
+            </tr>"""
+        for row in table_data:
+            gc = GRADE_COLORS_HTML.get(row.get("grade", "-"), "#6b7280")
+            valid_color = "#22c55e" if row["valid"] == "Yes" else "#ef4444" if row["valid"] == "No" else "#6b7280"
+            html += f"""<tr>
+                <td style="{tds}color:#58a6ff;font-family:monospace;">{row['subdomain']}</td>
+                <td style="{tds}font-family:monospace;">{row['ip']}</td>
+                <td style="{tds}color:{valid_color};font-weight:bold;">{row['valid']}</td>
+                <td style="{tds}">{row['issuer']}</td>
+                <td style="{tds}text-align:right;">{row['days_left']}</td>
+                <td style="{tds}">{row['protocol']}</td>
+                <td style="{tds}color:{gc};font-weight:bold;">{row['grade']}</td>
+            </tr>"""
+        html += "</table>"
+        return html
+
+    elif table_type == "http":
+        html = f"""<table style="width:100%;border-collapse:collapse;">
+            <tr style="border-bottom:1px solid #30363d;">
+                <th style="{ths}">Subdomain</th>
+                <th style="{ths}">Reachable</th>
+                <th style="{ths}">HTTPS</th>
+                <th style="{ths}">Status</th>
+                <th style="{ths}">Server</th>
+                <th style="{ths}">Redirect</th>
+            </tr>"""
+        for row in table_data:
+            https_color = "#22c55e" if row["https"] == "Yes" else "#ef4444" if row["reachable"] == "Yes" else "#6b7280"
+            html += f"""<tr>
+                <td style="{tds}color:#58a6ff;font-family:monospace;">{row['subdomain']}</td>
+                <td style="{tds}">{row['reachable']}</td>
+                <td style="{tds}color:{https_color};font-weight:bold;">{row['https']}</td>
+                <td style="{tds}">{row['status']}</td>
+                <td style="{tds}">{row['server']}</td>
+                <td style="{tds}font-size:11px;word-break:break-all;">{row['redirect']}</td>
+            </tr>"""
+        html += "</table>"
+        return html
+
+    return ""
+
 
 def _display_colab(result: AuditResult) -> None:
     import random
@@ -353,6 +494,26 @@ def _display_colab(result: AuditResult) -> None:
                     findings_html += f'<div style="color:#58a6ff;font-size:12px;margin-top:8px;">Fix: {fix}</div>'
 
                 findings_html += "</div>"
+
+            # Subdomain data table
+            elif f.get("table_type"):
+                table_type = f["table_type"]
+                table_data = f.get("table_data", [])
+
+                if table_data:
+                    findings_html += f"""
+                    <div style="margin:8px;padding:12px;background:#161b22;border-radius:8px;border-left:3px solid {fc};">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                            <span style="color:{fc};font-weight:bold;font-size:14px;">{fg}</span>
+                            <span style="font-weight:bold;font-size:13px;">{f.get('label','')}</span>
+                            <span style="color:#8b949e;font-size:12px;">{detail}</span>
+                        </div>"""
+
+                    findings_html += _colab_data_table(table_type, table_data)
+
+                    if fix:
+                        findings_html += f'<div style="color:#58a6ff;font-size:12px;margin-top:8px;">Fix: {fix}</div>'
+                    findings_html += "</div>"
 
             # Standard finding (non-detailed)
             elif fg in ("A", "-"):
