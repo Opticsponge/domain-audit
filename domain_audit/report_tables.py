@@ -19,8 +19,13 @@ GRADE_COLORS = {
 }
 
 
-def render_html(result: AuditResult) -> str:
-    """Build full HTML report with one table per category, sorted by risk."""
+def render_html(result: AuditResult, grade_filter: str = "all") -> str:
+    """Build full HTML report with one table per category, sorted by risk.
+
+    Args:
+        grade_filter: Pre-select a grade filter. "all" shows everything,
+                      "F"/"C"/"B"/"A" pre-activates that filter on load.
+    """
     domain = _esc(result.domain)
     gc = GRADE_COLORS.get(result.overall_grade, "#6b7280")
 
@@ -113,14 +118,17 @@ def render_html(result: AuditResult) -> str:
 
     body = "\n".join(sections)
 
+    # Pre-select filter from parameter
+    initial_filter = grade_filter.upper() if grade_filter and grade_filter.lower() != "all" else ""
+
     filter_bar = f"""
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;padding:10px 14px;background:#161b22;border-radius:8px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;padding:10px 14px;background:#161b22;border-radius:8px;flex-wrap:wrap;">
         <span style="font-size:12px;color:#8b949e;margin-right:4px;">Filter:</span>
-        <button onclick="{uid}_filter('F')" id="{uid}_btn_F" style="cursor:pointer;padding:4px 12px;border:2px solid #ef4444;border-radius:6px;background:#ef444420;color:#ef4444;font-weight:bold;font-size:13px;">F</button>
-        <button onclick="{uid}_filter('C')" id="{uid}_btn_C" style="cursor:pointer;padding:4px 12px;border:2px solid #f97316;border-radius:6px;background:#f9731620;color:#f97316;font-weight:bold;font-size:13px;">C</button>
-        <button onclick="{uid}_filter('B')" id="{uid}_btn_B" style="cursor:pointer;padding:4px 12px;border:2px solid #eab308;border-radius:6px;background:#eab30820;color:#eab308;font-weight:bold;font-size:13px;">B</button>
-        <button onclick="{uid}_filter('A')" id="{uid}_btn_A" style="cursor:pointer;padding:4px 12px;border:2px solid #22c55e;border-radius:6px;background:#22c55e20;color:#22c55e;font-weight:bold;font-size:13px;">A</button>
-        <button onclick="{uid}_filter('all')" id="{uid}_btn_all" style="cursor:pointer;padding:4px 12px;border:2px solid #58a6ff;border-radius:6px;background:#58a6ff20;color:#58a6ff;font-weight:bold;font-size:12px;">Show All</button>
+        <button onclick="{uid}_filter('F')" id="{uid}_btn_F" style="cursor:pointer;padding:4px 12px;border:2px solid #ef4444;border-radius:6px;background:#ef444420;color:#ef4444;font-weight:bold;font-size:13px;">F &middot; Fail</button>
+        <button onclick="{uid}_filter('C')" id="{uid}_btn_C" style="cursor:pointer;padding:4px 12px;border:2px solid #f97316;border-radius:6px;background:#f9731620;color:#f97316;font-weight:bold;font-size:13px;">C &middot; Warn</button>
+        <button onclick="{uid}_filter('B')" id="{uid}_btn_B" style="cursor:pointer;padding:4px 12px;border:2px solid #eab308;border-radius:6px;background:#eab30820;color:#eab308;font-weight:bold;font-size:13px;">B &middot; OK</button>
+        <button onclick="{uid}_filter('A')" id="{uid}_btn_A" style="cursor:pointer;padding:4px 12px;border:2px solid #22c55e;border-radius:6px;background:#22c55e20;color:#22c55e;font-weight:bold;font-size:13px;">A &middot; Pass</button>
+        <button onclick="{uid}_filter('all')" id="{uid}_btn_all" style="cursor:pointer;padding:4px 12px;border:2px solid #58a6ff;border-radius:6px;background:#58a6ff20;color:#58a6ff;font-weight:bold;font-size:12px;">Select All</button>
     </div>
     <script>
     var {uid}_active = new Set();
@@ -132,7 +140,9 @@ def render_html(result: AuditResult) -> str:
         }} else {{
             {uid}_active.add(grade);
         }}
-        // Update button styles
+        {uid}_applyFilter();
+    }}
+    function {uid}_applyFilter() {{
         ['F','C','B','A'].forEach(function(g) {{
             var btn = document.getElementById('{uid}_btn_' + g);
             if ({uid}_active.size === 0 || {uid}_active.has(g)) {{
@@ -142,7 +152,6 @@ def render_html(result: AuditResult) -> str:
             }}
         }});
         document.getElementById('{uid}_btn_all').style.opacity = {uid}_active.size === 0 ? '1' : '0.5';
-        // Filter table rows
         var rows = document.querySelectorAll('[data-{uid}-grade]');
         rows.forEach(function(row) {{
             var rowGrade = row.getAttribute('data-{uid}-grade');
@@ -153,20 +162,91 @@ def render_html(result: AuditResult) -> str:
             }}
         }});
     }}
+    // Apply initial filter if set
+    (function() {{
+        var init = '{initial_filter}';
+        if (init && ['F','C','B','A'].indexOf(init) >= 0) {{
+            {uid}_active.add(init);
+            {uid}_applyFilter();
+        }}
+    }})();
     </script>
     """
 
+    # ── Build header info boxes ──
+    # Box 1: Audit grade (left-aligned)
+    box1 = f"""
+    <div style="flex:1;min-width:180px;padding:16px 20px;background:#161b22;border-radius:10px;border:1px solid #30363d;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#6b7280;margin-bottom:4px;">Domain Audit Report</div>
+        <div style="font-size:22px;font-weight:bold;color:#fff;margin-bottom:8px;font-family:monospace;">{domain}</div>
+        <div style="display:flex;align-items:center;gap:12px;">
+            <div style="font-size:42px;font-weight:bold;color:{gc};line-height:1;">{result.overall_grade}</div>
+            <div>
+                <div style="font-size:12px;color:{gc};text-transform:uppercase;letter-spacing:1px;font-weight:600;">Overall</div>
+                <div style="font-size:11px;color:#484f58;">Scanned in {result.elapsed:.1f}s</div>
+            </div>
+        </div>
+    </div>"""
+
+    # Box 2: WHOIS summary
+    whois_raw = result.results.get("whois", None)
+    if whois_raw:
+        wd = whois_raw.raw_data
+        w_registrar = _esc(str(wd.get("registrar") or "Unknown"))
+        w_created = _esc(str(wd.get("creation_date") or "-"))[:10]
+        w_expires = _esc(str(wd.get("expiration_date") or "-"))[:10]
+        w_days = wd.get("days_to_expiry")
+        w_days_str = f"{w_days} days" if w_days is not None else "-"
+        w_dnssec = "Yes" if wd.get("dnssec_enabled") else "No"
+        w_privacy = "Yes" if wd.get("privacy_protected") else "No"
+        w_dnssec_color = "#22c55e" if wd.get("dnssec_enabled") else "#ef4444"
+        w_days_color = "#22c55e" if (w_days or 0) > 90 else "#eab308" if (w_days or 0) > 30 else "#ef4444"
+    else:
+        w_registrar = w_created = w_expires = w_days_str = w_dnssec = w_privacy = "-"
+        w_dnssec_color = w_days_color = "#6b7280"
+
+    box2 = f"""
+    <div style="flex:1;min-width:200px;padding:16px 20px;background:#161b22;border-radius:10px;border:1px solid #30363d;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#6b7280;margin-bottom:10px;">WHOIS</div>
+        <table style="width:100%;font-size:12px;border-collapse:collapse;">
+            <tr><td style="color:#8b949e;padding:2px 0;">Registrar</td><td style="text-align:right;font-weight:600;padding:2px 0;">{w_registrar}</td></tr>
+            <tr><td style="color:#8b949e;padding:2px 0;">Created</td><td style="text-align:right;padding:2px 0;">{w_created}</td></tr>
+            <tr><td style="color:#8b949e;padding:2px 0;">Expires</td><td style="text-align:right;color:{w_days_color};font-weight:600;padding:2px 0;">{w_expires} ({w_days_str})</td></tr>
+            <tr><td style="color:#8b949e;padding:2px 0;">DNSSEC</td><td style="text-align:right;color:{w_dnssec_color};font-weight:600;padding:2px 0;">{w_dnssec}</td></tr>
+            <tr><td style="color:#8b949e;padding:2px 0;">Privacy</td><td style="text-align:right;padding:2px 0;">{w_privacy}</td></tr>
+        </table>
+    </div>"""
+
+    # Box 3: Tech stack summary
+    tech_raw = result.results.get("tech", None)
+    if tech_raw:
+        techs = tech_raw.raw_data.get("technologies", [])
+        tech_items = ""
+        for t in techs[:8]:  # Limit to 8 in header
+            cat = _esc(t.get("source", "").split(":")[0] if t.get("source") else "")
+            name = _esc(t.get("name", ""))
+            tech_items += f'<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:12px;"><span style="color:#8b949e;">{cat}</span><span style="font-weight:600;">{name}</span></div>'
+        if not techs:
+            tech_items = '<div style="color:#6b7280;font-size:12px;">None detected</div>'
+        if len(techs) > 8:
+            tech_items += f'<div style="color:#6b7280;font-size:11px;padding-top:4px;">+{len(techs) - 8} more</div>'
+    else:
+        tech_items = '<div style="color:#6b7280;font-size:12px;">Scanner not run</div>'
+
+    box3 = f"""
+    <div style="flex:1;min-width:200px;padding:16px 20px;background:#161b22;border-radius:10px;border:1px solid #30363d;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#6b7280;margin-bottom:10px;">Tech Stack</div>
+        {tech_items}
+    </div>"""
+
+    header_row = f"""
+    <div style="display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap;">
+        {box1}{box2}{box3}
+    </div>"""
+
     return f"""
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:#010409;color:#e6edf3;padding:24px;border-radius:12px;max-width:100%;width:100%;" id="{uid}_root">
-        <div style="text-align:center;margin-bottom:28px;">
-            <div style="font-size:11px;text-transform:uppercase;letter-spacing:3px;color:#6b7280;">Domain Audit Report</div>
-            <div style="font-size:32px;font-weight:bold;margin:8px 0;color:#fff;">{domain}</div>
-            <div style="display:inline-block;padding:10px 32px;border-radius:10px;background:{gc}15;border:2px solid {gc}40;margin-top:8px;">
-                <div style="font-size:48px;font-weight:bold;color:{gc};">{result.overall_grade}</div>
-                <div style="font-size:11px;color:{gc};text-transform:uppercase;letter-spacing:2px;">Overall</div>
-            </div>
-            <div style="font-size:12px;color:#484f58;margin-top:12px;">Scanned in {result.elapsed:.1f}s</div>
-        </div>
+        {header_row}
         {filter_bar}
         {body}
         {action_html}
@@ -174,13 +254,18 @@ def render_html(result: AuditResult) -> str:
     """
 
 
-def display(result: AuditResult) -> None:
-    """Render the tabular report in Colab or as raw HTML."""
+def display(result: AuditResult, grade_filter: str = "all") -> None:
+    """Render the tabular report in Colab or as raw HTML.
+
+    Args:
+        grade_filter: Pre-select a grade filter. "all" shows everything,
+                      "F"/"C"/"B"/"A" pre-activates that filter on load.
+    """
     try:
         from IPython.display import display as ipy_display, HTML
-        ipy_display(HTML(render_html(result)))
+        ipy_display(HTML(render_html(result, grade_filter=grade_filter)))
     except ImportError:
-        print(render_html(result))
+        print(render_html(result, grade_filter=grade_filter))
 
 
 # ═══════════════════════════════════════════════════════════════════
