@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-04-12
+
+### Changed
+- Minimum Python version bumped from 3.9 to 3.10 (required by `mcp` dependency)
+- SSL expiration grade B threshold lowered from 90 to 60 days
+
+### Fixed
+- Email scanner now checks for MX records first — skips SPF/DKIM/DMARC if domain doesn't receive email
+- Missing NS records on subdomains no longer graded F (subdomains inherit NS from parent zone)
+
 ## [0.1.0] - 2026-04-12
 
 ### Added
@@ -28,4 +38,5 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - RDAP URL-encoding to prevent path traversal
 - XSS-safe HTML escaping in Colab renderer
 
+[0.1.1]: https://github.com/Opticsponge/domain-audit/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Opticsponge/domain-audit/releases/tag/v0.1.0
