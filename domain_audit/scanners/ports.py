@@ -52,7 +52,7 @@ def _check_port(host: str, port: int) -> tuple[int, str]:
         if result == errno.ECONNREFUSED:
             return port, PORT_CLOSED
         return port, PORT_FILTERED
-    except socket.timeout:
+    except TimeoutError:
         return port, PORT_FILTERED
     except OSError:
         return port, PORT_CLOSED
