@@ -108,3 +108,32 @@ class TestGenerateActionItems:
         items = generate_action_items(results)
         assert items[0]["severity"] == "CRITICAL"
         assert items[1]["severity"] == "HIGH"
+
+    def test_location_from_domain_field(self):
+        results = {
+            "headers": _make_result("headers", "C", findings=[
+                {"label": "CSP", "grade": "C", "detail": "Missing", "fix": "Add CSP",
+                 "domain": "sub.example.com"},
+            ]),
+        }
+        items = generate_action_items(results)
+        assert items[0]["location"] == "sub.example.com"
+
+    def test_location_from_host_field(self):
+        results = {
+            "ports": _make_result("ports", "F", findings=[
+                {"label": "Dangerous ports", "grade": "F", "detail": "3306 open",
+                 "fix": "Close port", "host": "db.example.com"},
+            ]),
+        }
+        items = generate_action_items(results)
+        assert items[0]["location"] == "db.example.com"
+
+    def test_no_location_when_absent(self):
+        results = {
+            "ssl": _make_result("ssl", "F", findings=[
+                {"label": "Expired", "grade": "F", "detail": "Expired", "fix": "Renew"},
+            ]),
+        }
+        items = generate_action_items(results)
+        assert "location" not in items[0]

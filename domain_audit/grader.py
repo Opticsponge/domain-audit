@@ -74,13 +74,17 @@ def generate_action_items(results: dict[str, ScanResult]) -> list[dict[str, str]
                 continue
 
             severity = _grade_to_severity(finding.get("grade", "C"))
-            items.append({
+            location = finding.get("domain") or finding.get("host") or ""
+            item = {
                 "severity": severity,
                 "module": module,
                 "issue": finding.get("label", "Unknown issue"),
                 "detail": finding.get("detail", ""),
                 "fix": finding.get("fix", ""),
-            })
+            }
+            if location:
+                item["location"] = location
+            items.append(item)
 
     items.sort(key=lambda x: severity_order.get(x["severity"], 99))
     return items
