@@ -8,8 +8,8 @@ from domain_audit.scanners.email_security import scan as email_scan
 from domain_audit.scanners.tech_detect import scan as tech_scan
 
 SCANNERS = {
-    "dns": dns_scan,
     "subdomains": subdomain_scan,
+    "dns": dns_scan,
     "ssl": ssl_scan,
     "headers": headers_scan,
     "whois": whois_scan,
