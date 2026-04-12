@@ -1,0 +1,502 @@
+[
+  {
+    "pattern": "google-site-verification",
+    "name": "Google Search Console"
+  },
+  {
+    "pattern": "facebook-domain-verification",
+    "name": "Facebook Business"
+  },
+  {
+    "pattern": "apple-domain-verification",
+    "name": "Apple"
+  },
+  {
+    "pattern": "ms=",
+    "name": "Microsoft 365"
+  },
+  {
+    "pattern": "v=spf1",
+    "name": "SPF"
+  },
+  {
+    "pattern": "atlassian-domain-verification",
+    "name": "Atlassian"
+  },
+  {
+    "pattern": "adobe-sign-verification",
+    "name": "Adobe Sign"
+  },
+  {
+    "pattern": "docusign",
+    "name": "DocuSign"
+  },
+  {
+    "pattern": "stripe-verification",
+    "name": "Stripe"
+  },
+  {
+    "pattern": "brevo-code",
+    "name": "Brevo"
+  },
+  {
+    "pattern": "mailchimp",
+    "name": "Mailchimp"
+  },
+  {
+    "pattern": "hubspot",
+    "name": "HubSpot"
+  },
+  {
+    "pattern": "salesforce",
+    "name": "Salesforce"
+  },
+  {
+    "pattern": "zendesk-domain-verification",
+    "name": "Zendesk"
+  },
+  {
+    "pattern": "miro-verification",
+    "name": "Miro"
+  },
+  {
+    "pattern": "zoom-domain-verification",
+    "name": "Zoom"
+  },
+  {
+    "pattern": "slack-domain-verification",
+    "name": "Slack"
+  },
+  {
+    "pattern": "dropbox-domain-verification",
+    "name": "Dropbox"
+  },
+  {
+    "pattern": "notion-domain-verification",
+    "name": "Notion"
+  },
+  {
+    "pattern": "postmark-domain-verification",
+    "name": "Postmark"
+  },
+  {
+    "pattern": "sendgrid",
+    "name": "SendGrid"
+  },
+  {
+    "pattern": "amazonses",
+    "name": "Amazon SES"
+  },
+  {
+    "pattern": "mandrill",
+    "name": "Mandrill"
+  },
+  {
+    "pattern": "logmein-verification-code",
+    "name": "LogMeIn"
+  },
+  {
+    "pattern": "citrix-verification-code",
+    "name": "Citrix"
+  },
+  {
+    "pattern": "have-i-been-pwned-verification",
+    "name": "Have I Been Pwned"
+  },
+  {
+    "pattern": "globalsign-domain-verification",
+    "name": "GlobalSign"
+  },
+  {
+    "pattern": "digicert",
+    "name": "DigiCert"
+  },
+  {
+    "pattern": "sectigo",
+    "name": "Sectigo"
+  },
+  {
+    "pattern": "letsencrypt",
+    "name": "Let's Encrypt"
+  },
+  {
+    "pattern": "twilio-domain-verification",
+    "name": "Twilio"
+  },
+  {
+    "pattern": "postman-domain-verification",
+    "name": "Postman"
+  },
+  {
+    "pattern": "anthropic-domain-verification",
+    "name": "Anthropic"
+  },
+  {
+    "pattern": "ZOOM_verify_",
+    "name": "Zoom"
+  },
+  {
+    "pattern": "zoom-domain-verification",
+    "name": "Zoom"
+  },
+  {
+    "pattern": "status-page-domain-verification",
+    "name": "Statuspage"
+  },
+  {
+    "pattern": "statuspage-domain-verification",
+    "name": "Statuspage"
+  },
+  {
+    "pattern": "1password-site-verification",
+    "name": "1Password"
+  },
+  {
+    "pattern": "onetrust-domain-verification",
+    "name": "OneTrust"
+  },
+  {
+    "pattern": "cisco-site-verification",
+    "name": "Cisco"
+  },
+  {
+    "pattern": "webex-domain-verification",
+    "name": "Webex"
+  },
+  {
+    "pattern": "airtable-verification",
+    "name": "Airtable"
+  },
+  {
+    "pattern": "notion-domain-verification",
+    "name": "Notion"
+  },
+  {
+    "pattern": "canva-site-verification",
+    "name": "Canva"
+  },
+  {
+    "pattern": "asana-domain-verification",
+    "name": "Asana"
+  },
+  {
+    "pattern": "monday-domain-verification",
+    "name": "Monday.com"
+  },
+  {
+    "pattern": "linear-verification",
+    "name": "Linear"
+  },
+  {
+    "pattern": "figma-domain-verification",
+    "name": "Figma"
+  },
+  {
+    "pattern": "loom-verification",
+    "name": "Loom"
+  },
+  {
+    "pattern": "zapier-domain-verification",
+    "name": "Zapier"
+  },
+  {
+    "pattern": "pendo-domain-verification",
+    "name": "Pendo"
+  },
+  {
+    "pattern": "segment-site-verification",
+    "name": "Segment"
+  },
+  {
+    "pattern": "mixpanel-domain-verify",
+    "name": "Mixpanel"
+  },
+  {
+    "pattern": "datadog-domain-verification",
+    "name": "Datadog"
+  },
+  {
+    "pattern": "new-relic-domain-verification",
+    "name": "New Relic"
+  },
+  {
+    "pattern": "dynatrace-site-verification",
+    "name": "Dynatrace"
+  },
+  {
+    "pattern": "pagerduty-domain-verification",
+    "name": "PagerDuty"
+  },
+  {
+    "pattern": "opsgenie-domain-verification",
+    "name": "Opsgenie"
+  },
+  {
+    "pattern": "docker-verification",
+    "name": "Docker"
+  },
+  {
+    "pattern": "github-verification",
+    "name": "GitHub"
+  },
+  {
+    "pattern": "gitlab-pages-verification",
+    "name": "GitLab"
+  },
+  {
+    "pattern": "include:_spf.google.com",
+    "name": "Google Workspace"
+  },
+  {
+    "pattern": "include:spf.protection.outlook.com",
+    "name": "Microsoft 365"
+  },
+  {
+    "pattern": "include:amazonses.com",
+    "name": "Amazon SES"
+  },
+  {
+    "pattern": "include:sendgrid.net",
+    "name": "SendGrid"
+  },
+  {
+    "pattern": "include:mailgun.org",
+    "name": "Mailgun"
+  },
+  {
+    "pattern": "include:servers.mcsv.net",
+    "name": "Mailchimp"
+  },
+  {
+    "pattern": "include:spf.brevo.com",
+    "name": "Brevo"
+  },
+  {
+    "pattern": "include:spf.mandrillapp.com",
+    "name": "Mandrill"
+  },
+  {
+    "pattern": "include:mail.zendesk.com",
+    "name": "Zendesk"
+  },
+  {
+    "pattern": "include:_spf.salesforce.com",
+    "name": "Salesforce"
+  },
+  {
+    "pattern": "include:helpscoutemail.com",
+    "name": "Help Scout"
+  },
+  {
+    "pattern": "include:freshdesk.com",
+    "name": "Freshdesk"
+  },
+  {
+    "pattern": "include:hubspotemail.net",
+    "name": "HubSpot"
+  },
+  {
+    "pattern": "include:infusionmail.com",
+    "name": "Keap/Infusionsoft"
+  },
+  {
+    "pattern": "include:_spf.atlassian.net",
+    "name": "Atlassian"
+  },
+  {
+    "pattern": "include:email.freshdesk.com",
+    "name": "Freshdesk"
+  },
+  {
+    "pattern": "include:stspg-customer.com",
+    "name": "Statuspage"
+  },
+  {
+    "pattern": "include:spf.improvmx.com",
+    "name": "ImprovMX"
+  },
+  {
+    "pattern": "include:_spf.firebasemail.com",
+    "name": "Firebase"
+  },
+  {
+    "pattern": "include:twilio.com",
+    "name": "Twilio"
+  },
+  {
+    "pattern": "include:postmarkapp.com",
+    "name": "Postmark"
+  },
+  {
+    "pattern": "include:intercom.io",
+    "name": "Intercom"
+  },
+  {
+    "pattern": "openai-domain-verification",
+    "name": "OpenAI"
+  },
+  {
+    "pattern": "pinterest-site-verification",
+    "name": "Pinterest"
+  },
+  {
+    "pattern": "yandex-verification:",
+    "name": "Yandex"
+  },
+  {
+    "pattern": "baidu-site-verification",
+    "name": "Baidu"
+  },
+  {
+    "pattern": "protonmail-verification",
+    "name": "ProtonMail"
+  },
+  {
+    "pattern": "zoho-verification",
+    "name": "Zoho"
+  },
+  {
+    "pattern": "sophos-domain-verification",
+    "name": "Sophos"
+  },
+  {
+    "pattern": "teamviewer-sso-verification",
+    "name": "TeamViewer"
+  },
+  {
+    "pattern": "wrike-verification",
+    "name": "Wrike"
+  },
+  {
+    "pattern": "heroku-domain-verification",
+    "name": "Heroku"
+  },
+  {
+    "pattern": "detectify-verification",
+    "name": "Detectify"
+  },
+  {
+    "pattern": "ahrefs-site-verification",
+    "name": "Ahrefs"
+  },
+  {
+    "pattern": "keybase-site-verification",
+    "name": "Keybase"
+  },
+  {
+    "pattern": "site24x7-domain-verification",
+    "name": "Site24x7"
+  },
+  {
+    "pattern": "drift-domain-verification",
+    "name": "Drift"
+  },
+  {
+    "pattern": "smartsheet-site-validation",
+    "name": "Smartsheet"
+  },
+  {
+    "pattern": "bugcrowd-verification",
+    "name": "Bugcrowd"
+  },
+  {
+    "pattern": "cloudflare-verify",
+    "name": "Cloudflare"
+  },
+  {
+    "pattern": "fastly-domain-delegation",
+    "name": "Fastly"
+  },
+  {
+    "pattern": "knowbe4-site-verification",
+    "name": "KnowBe4"
+  },
+  {
+    "pattern": "workplace-domain-verification",
+    "name": "Workplace (Meta)"
+  },
+  {
+    "pattern": "shopify-domain-verification",
+    "name": "Shopify"
+  },
+  {
+    "pattern": "thousandeyes",
+    "name": "ThousandEyes"
+  },
+  {
+    "pattern": "brave-ledger-verification",
+    "name": "Brave"
+  },
+  {
+    "pattern": "loaderio=",
+    "name": "Loader.io"
+  },
+  {
+    "pattern": "godaddyverification",
+    "name": "GoDaddy"
+  },
+  {
+    "pattern": "aliyun-site-verification",
+    "name": "Alibaba Cloud"
+  },
+  {
+    "pattern": "pardot_",
+    "name": "Salesforce Pardot"
+  },
+  {
+    "pattern": "SFMC-",
+    "name": "Salesforce Marketing Cloud"
+  },
+  {
+    "pattern": "firebase=",
+    "name": "Firebase"
+  },
+  {
+    "pattern": "forward-email=",
+    "name": "Forward Email"
+  },
+  {
+    "pattern": "rebelmouse=",
+    "name": "RebelMouse"
+  },
+  {
+    "pattern": "include:_netblocks.mimecast.com",
+    "name": "Mimecast"
+  },
+  {
+    "pattern": "include:pphosted.com",
+    "name": "Proofpoint"
+  },
+  {
+    "pattern": "include:spf.mailjet.com",
+    "name": "Mailjet"
+  },
+  {
+    "pattern": "include:_spf.sparkpostmail.com",
+    "name": "SparkPost"
+  },
+  {
+    "pattern": "include:mail.klaviyo.com",
+    "name": "Klaviyo"
+  },
+  {
+    "pattern": "include:mktomail.com",
+    "name": "Marketo"
+  },
+  {
+    "pattern": "include:cust-spf.exacttarget.com",
+    "name": "Salesforce Marketing Cloud"
+  },
+  {
+    "pattern": "include:_spf.elasticemail.com",
+    "name": "Elastic Email"
+  },
+  {
+    "pattern": "include:spf.constantcontact.com",
+    "name": "Constant Contact"
+  },
+  {
+    "pattern": "include:_spf.campaignmonitor.com",
+    "name": "Campaign Monitor"
+  }
+]

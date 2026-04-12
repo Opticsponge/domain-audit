@@ -1,0 +1,26 @@
+[
+  {
+    "pattern": "X-Powered-By",
+    "name": ""
+  },
+  {
+    "pattern": "Server",
+    "name": ""
+  },
+  {
+    "pattern": "X-Drupal-Cache",
+    "name": "Drupal"
+  },
+  {
+    "pattern": "X-Generator",
+    "name": ""
+  },
+  {
+    "pattern": "X-AspNet-Version",
+    "name": "ASP.NET"
+  },
+  {
+    "pattern": "X-Shopify-Stage",
+    "name": "Shopify"
+  }
+]

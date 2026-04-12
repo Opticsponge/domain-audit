@@ -1,0 +1,214 @@
+[
+  {
+    "pattern": "website-files.com",
+    "name": "Webflow"
+  },
+  {
+    "pattern": "webflow.com",
+    "name": "Webflow"
+  },
+  {
+    "pattern": "cdn.shopify.com",
+    "name": "Shopify"
+  },
+  {
+    "pattern": "shopifycdn.com",
+    "name": "Shopify"
+  },
+  {
+    "pattern": "squarespace.com",
+    "name": "Squarespace"
+  },
+  {
+    "pattern": "sqspcdn.com",
+    "name": "Squarespace"
+  },
+  {
+    "pattern": "wixstatic.com",
+    "name": "Wix"
+  },
+  {
+    "pattern": "parastorage.com",
+    "name": "Wix"
+  },
+  {
+    "pattern": "ghost.io",
+    "name": "Ghost"
+  },
+  {
+    "pattern": "ghost.org",
+    "name": "Ghost"
+  },
+  {
+    "pattern": "hubspot.com",
+    "name": "HubSpot"
+  },
+  {
+    "pattern": "hubspot.net",
+    "name": "HubSpot"
+  },
+  {
+    "pattern": "hs-scripts.com",
+    "name": "HubSpot"
+  },
+  {
+    "pattern": "hsforms.com",
+    "name": "HubSpot"
+  },
+  {
+    "pattern": "contentful.com",
+    "name": "Contentful"
+  },
+  {
+    "pattern": "prismic.io",
+    "name": "Prismic"
+  },
+  {
+    "pattern": "sanity.io",
+    "name": "Sanity"
+  },
+  {
+    "pattern": "storyblok.com",
+    "name": "Storyblok"
+  },
+  {
+    "pattern": "framer.com",
+    "name": "Framer"
+  },
+  {
+    "pattern": "webnode.com",
+    "name": "Webnode"
+  },
+  {
+    "pattern": "godaddy.com",
+    "name": "GoDaddy"
+  },
+  {
+    "pattern": "carrd.co",
+    "name": "Carrd"
+  },
+  {
+    "pattern": "netlify.app",
+    "name": "Netlify"
+  },
+  {
+    "pattern": "netlify.com",
+    "name": "Netlify"
+  },
+  {
+    "pattern": "vercel.app",
+    "name": "Vercel"
+  },
+  {
+    "pattern": "vercel.com",
+    "name": "Vercel"
+  },
+  {
+    "pattern": "herokuapp.com",
+    "name": "Heroku"
+  },
+  {
+    "pattern": "cloudflare.com",
+    "name": "Cloudflare"
+  },
+  {
+    "pattern": "cloudflareinsights.com",
+    "name": "Cloudflare"
+  },
+  {
+    "pattern": "cdn-cgi/",
+    "name": "Cloudflare"
+  },
+  {
+    "pattern": "amazonaws.com",
+    "name": "AWS"
+  },
+  {
+    "pattern": "cloudfront.net",
+    "name": "AWS CloudFront"
+  },
+  {
+    "pattern": "azurewebsites.net",
+    "name": "Azure"
+  },
+  {
+    "pattern": "azureedge.net",
+    "name": "Azure CDN"
+  },
+  {
+    "pattern": "azure.com",
+    "name": "Azure"
+  },
+  {
+    "pattern": "googleusercontent.com",
+    "name": "Google Cloud"
+  },
+  {
+    "pattern": "googleapis.com",
+    "name": "Google Cloud"
+  },
+  {
+    "pattern": "firebase.com",
+    "name": "Firebase"
+  },
+  {
+    "pattern": "firebaseapp.com",
+    "name": "Firebase"
+  },
+  {
+    "pattern": "firebaseio.com",
+    "name": "Firebase"
+  },
+  {
+    "pattern": "fastly.net",
+    "name": "Fastly"
+  },
+  {
+    "pattern": "akamaized.net",
+    "name": "Akamai"
+  },
+  {
+    "pattern": "akamai.net",
+    "name": "Akamai"
+  },
+  {
+    "pattern": "edgecastcdn.net",
+    "name": "Edgecast"
+  },
+  {
+    "pattern": "stackpathdns.com",
+    "name": "StackPath"
+  },
+  {
+    "pattern": "digitaloceanspaces.com",
+    "name": "DigitalOcean"
+  },
+  {
+    "pattern": "pages.dev",
+    "name": "Cloudflare Pages"
+  },
+  {
+    "pattern": "workers.dev",
+    "name": "Cloudflare Workers"
+  },
+  {
+    "pattern": "fly.dev",
+    "name": "Fly.io"
+  },
+  {
+    "pattern": "render.com",
+    "name": "Render"
+  },
+  {
+    "pattern": "railway.app",
+    "name": "Railway"
+  },
+  {
+    "pattern": "supabase.co",
+    "name": "Supabase"
+  },
+  {
+    "pattern": "supabase.com",
+    "name": "Supabase"
+  }
+]

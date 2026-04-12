@@ -1,0 +1,10 @@
+[
+  {
+    "pattern": "<meta[^>]+name=[\"\\']generator[\"\\'][^>]+content=[\"\\']([^\"\\']+)[\"\\']",
+    "name": "generator"
+  },
+  {
+    "pattern": "<meta[^>]+content=[\"\\']([^\"\\']+)[\"\\'][^>]+name=[\"\\']generator[\"\\']",
+    "name": "generator"
+  }
+]

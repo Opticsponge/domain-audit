@@ -19,24 +19,29 @@
 
 ---
 
+> **This is an experimental/learning project** and should not be considered production-grade software. It is shared for educational purposes, personal exploration, and as a foundation for further development. Use at your own risk — results may be incomplete or inaccurate. Contributions and feedback are welcome.
+
 Scan any domain and get an instant health report with **A-F grades** and **actionable fix recommendations**. Built for sysadmins and DevOps engineers. No API keys required.
 
 ```
-╔══════════════════════════════════════════════════════╗
-║         DOMAIN AUDIT: example.com                    ║
-║         Overall Grade: B                             ║
-╠══════════════════════════════════════════════════════╣
-║ SSL/TLS           │  A  │ Valid, 142 days left       ║
-║ DNS Records       │  A  │ All records found          ║
-║ HTTP Headers      │  C  │ Missing CSP, HSTS          ║
-║ Email Security    │  F  │ No DMARC record            ║
-║ Open Ports        │  A  │ Only 80, 443 open          ║
-╠══════════════════════════════════════════════════════╣
-║ ACTION ITEMS:                                        ║
-║ 1. [CRITICAL] Add DMARC record                      ║
-║ 2. [HIGH] Add Content-Security-Policy header         ║
-║ 3. [HIGH] Enable HSTS                               ║
-╚══════════════════════════════════════════════════════╝
+╔═══════════════════════════════════════════════════════════╗
+║         DOMAIN AUDIT: example.com                         ║
+║         Overall Grade: B                                  ║
+╠═══════════════════════════════════════════════════════════╣
+║ Subdomains        │  -  │ 12 discovered                   ║
+║ DNS Records       │  A  │ All records found                ║
+║ SSL/TLS           │  A  │ Valid, 142 days left             ║
+║ HTTP Headers      │  C  │ Missing CSP, HSTS               ║
+║ WHOIS             │  A  │ 364 days until expiry            ║
+║ Open Ports        │  A  │ 2 open, 10 closed, 4 filtered   ║
+║ Email Security    │  F  │ No DMARC record                  ║
+║ Tech Stack        │  -  │ Cloudflare, Next.js, Stripe      ║
+╠═══════════════════════════════════════════════════════════╣
+║ ACTION ITEMS:                                             ║
+║ 1. [CRITICAL] Add DMARC record                           ║
+║ 2. [HIGH] Add Content-Security-Policy header              ║
+║ 3. [HIGH] Enable HSTS                                     ║
+╚═══════════════════════════════════════════════════════════╝
 ```
 
 ## Quick Start
@@ -104,7 +109,7 @@ results.to_csv("audit.csv")
 | **WHOIS** | Registrar info, domain creation & expiration dates, name servers | A-F |
 | **Email Security** | SPF (parsed tags + chain lookup limit), DKIM (36 selectors), DMARC (parsed tags + policy tests) — MXToolbox-style tables | A-F |
 | **Open Ports** | 16 ports across main domain + all discovered subdomains: FTP, SSH, SMTP, HTTP, HTTPS, MSSQL, MySQL, RDP, PostgreSQL, Elasticsearch (9200/9300), MongoDB (27017-27019), 8080, 8443 | A-F |
-| **Tech Stack** | 5-source detection: response headers, meta tags, URL paths, asset/CDN URL fingerprinting, inline JS markers — ~100 built-in technologies across 8 categories + custom patterns | Informational |
+| **Tech Stack** | 6-source detection: response headers, meta tags, URL paths, asset/CDN URLs, inline JS markers, DNS records (TXT + CNAME) — ~150 built-in technologies + custom patterns | Informational |
 
 ## Grading System
 
@@ -144,7 +149,7 @@ headers     Security headers + redirect chain analysis + cookie security flags
 whois       WHOIS registration, domain expiry, name servers
 ports       16-port scan across main domain + subdomains (HTTP, HTTPS, SSH, SMTP, MSSQL, MySQL, RDP, PostgreSQL, Elasticsearch, MongoDB)
 email       SPF/DKIM/DMARC with parsed record tables, validation tests, SPF lookup chain counting
-tech        5-source fingerprinting: headers, meta tags, URL paths, CDN/asset URLs, inline JS markers
+tech        6-source fingerprinting: headers, meta tags, URL paths, CDN/asset URLs, inline JS, DNS records
 ```
 
 Run specific ones with `--only`:
@@ -154,7 +159,7 @@ domain-audit example.com --only ssl,email,headers
 
 ## Tech Stack Detection
 
-The tech scanner uses 5 detection sources to identify ~100 technologies:
+The tech scanner uses 6 detection sources to identify ~150 technologies:
 
 | Source | How It Works | Example |
 |--------|-------------|---------|
@@ -163,8 +168,9 @@ The tech scanner uses 5 detection sources to identify ~100 technologies:
 | **URL Paths** | Finds CMS paths in page HTML (`/wp-admin/`, `/administrator/`) | WordPress, Joomla, Drupal |
 | **Asset URLs** | Fingerprints `<script src>` / `<link href>` by CDN domain and filename | Webflow from CDN URL, React from bundle name |
 | **Inline JS** | Detects framework globals (`__NEXT_DATA__`, `Shopify.`, `wixBiSession`) | Next.js, Shopify, Wix |
+| **DNS Records** | TXT verification records + CNAME targets reveal platforms and services | Google Workspace (SPF), Shopify (CNAME), Postman, Stoplight |
 
-Results are grouped into 8 categories: Server/Hosting, Framework/CMS, UI/CSS, Analytics/Marketing, Developer Tools, Chat/Support, Payments, Security/Compliance.
+Results are grouped into categories: Server/Hosting, Framework/CMS, UI/CSS, Analytics/Marketing, Developer/API Tools, Email/Transactional, Business Tools, Monitoring/Ops, and more.
 
 ### Custom Tech Patterns
 
@@ -220,6 +226,8 @@ domain-audit example.com --tech-patterns patterns.json
 | `inline_js` | Regex match on page HTML | JS globals, framework markers |
 | `headers` | Header name lookup (empty `name` → use header value) | Custom response headers |
 | `paths` | Substring match in page HTML | CMS admin paths, known routes |
+| `dns_txt` | Substring match on TXT records | Domain verification, SPF includes |
+| `dns_cname` | Substring match on CNAME targets | Hosting, SaaS platform CNAMEs |
 
 Each pattern: `{"pattern": "...", "name": "TechName", "category": "Optional Category"}`. Category defaults to "Other" if omitted. Patterns are additive — they extend the built-in set, never replace it.
 
@@ -246,21 +254,32 @@ pytest tests/ -v
 
 ```
 domain_audit/
-├── __init__.py          # Public API: audit(), AuditResult, ScanResult
+├── __init__.py          # Public API: audit(), AuditResult, ScanResult, TechPatterns
 ├── cli.py               # CLI entry point
-├── core.py              # Orchestrator — parallel scanner execution
+├── core.py              # Orchestrator — two-phase parallel scanner execution
 ├── grader.py            # Grading logic + action item generation
 ├── retry.py             # Retry decorator with exponential backoff
 ├── report.py            # Terminal (Rich) and Colab (HTML) renderers
+├── report_tables.py     # Category-based HTML report tables
 └── scanners/
     ├── dns_records.py   # DNS enumeration
     ├── subdomains.py    # CT log subdomain discovery
     ├── ssl_check.py     # SSL/TLS certificate checks
     ├── headers.py       # HTTP security headers
     ├── whois_info.py    # WHOIS lookup
-    ├── ports.py         # Port scanning
+    ├── ports.py         # Port scanning (main domain + subdomains)
     ├── email_security.py # SPF/DKIM/DMARC
-    └── tech_detect.py   # Technology fingerprinting
+    ├── tech_detect.py   # Technology fingerprinting (loads patterns from JSON)
+    └── tech_patterns/   # Standalone JSON pattern files (easy to PR)
+        ├── cdn_domains.json   # CDN/hosting domain → tech mapping
+        ├── asset_paths.json   # JS/CSS URL regex → tech mapping
+        ├── inline_js.json     # Inline JS globals → tech mapping
+        ├── dns_txt.json       # TXT record patterns → tech mapping
+        ├── dns_cname.json     # CNAME target patterns → tech mapping
+        ├── headers.json       # Response header → tech mapping
+        ├── paths.json         # URL path → tech mapping
+        ├── meta_tags.json     # Meta tag patterns → tech mapping
+        └── categories.json    # Tech name → display category grouping
 ```
 
 ## Contributing

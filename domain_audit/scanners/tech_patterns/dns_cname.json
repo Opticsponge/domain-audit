@@ -1,0 +1,402 @@
+[
+  {
+    "pattern": ".netlify.app",
+    "name": "Netlify"
+  },
+  {
+    "pattern": ".netlify.com",
+    "name": "Netlify"
+  },
+  {
+    "pattern": ".vercel-dns.com",
+    "name": "Vercel"
+  },
+  {
+    "pattern": ".herokudns.com",
+    "name": "Heroku"
+  },
+  {
+    "pattern": ".herokuapp.com",
+    "name": "Heroku"
+  },
+  {
+    "pattern": ".cloudfront.net",
+    "name": "AWS CloudFront"
+  },
+  {
+    "pattern": ".azurewebsites.net",
+    "name": "Azure"
+  },
+  {
+    "pattern": ".trafficmanager.net",
+    "name": "Azure"
+  },
+  {
+    "pattern": ".azureedge.net",
+    "name": "Azure CDN"
+  },
+  {
+    "pattern": ".cloudflare.net",
+    "name": "Cloudflare"
+  },
+  {
+    "pattern": ".fastly.net",
+    "name": "Fastly"
+  },
+  {
+    "pattern": ".edgekey.net",
+    "name": "Akamai"
+  },
+  {
+    "pattern": ".akamaiedge.net",
+    "name": "Akamai"
+  },
+  {
+    "pattern": ".firebaseapp.com",
+    "name": "Firebase"
+  },
+  {
+    "pattern": ".ghost.io",
+    "name": "Ghost"
+  },
+  {
+    "pattern": ".fly.dev",
+    "name": "Fly.io"
+  },
+  {
+    "pattern": ".render.com",
+    "name": "Render"
+  },
+  {
+    "pattern": ".pages.dev",
+    "name": "Cloudflare Pages"
+  },
+  {
+    "pattern": ".b-cdn.net",
+    "name": "BunnyCDN"
+  },
+  {
+    "pattern": ".myshopify.com",
+    "name": "Shopify"
+  },
+  {
+    "pattern": ".shopify.com",
+    "name": "Shopify"
+  },
+  {
+    "pattern": ".squarespace.com",
+    "name": "Squarespace"
+  },
+  {
+    "pattern": ".wixdns.net",
+    "name": "Wix"
+  },
+  {
+    "pattern": ".proxy-ssl.webflow.com",
+    "name": "Webflow"
+  },
+  {
+    "pattern": ".webflow.io",
+    "name": "Webflow"
+  },
+  {
+    "pattern": ".ghost.io",
+    "name": "Ghost"
+  },
+  {
+    "pattern": ".wordpress.com",
+    "name": "WordPress.com"
+  },
+  {
+    "pattern": ".wpengine.com",
+    "name": "WP Engine"
+  },
+  {
+    "pattern": ".pantheonsite.io",
+    "name": "Pantheon"
+  },
+  {
+    "pattern": ".kinsta.cloud",
+    "name": "Kinsta"
+  },
+  {
+    "pattern": ".flywheelsites.com",
+    "name": "Flywheel"
+  },
+  {
+    "pattern": ".hubspot.net",
+    "name": "HubSpot"
+  },
+  {
+    "pattern": ".hs-sites.com",
+    "name": "HubSpot"
+  },
+  {
+    "pattern": ".unbounce.com",
+    "name": "Unbounce"
+  },
+  {
+    "pattern": ".instapage.com",
+    "name": "Instapage"
+  },
+  {
+    "pattern": ".leadpages.net",
+    "name": "Leadpages"
+  },
+  {
+    "pattern": ".strikingly.com",
+    "name": "Strikingly"
+  },
+  {
+    "pattern": ".crd.co",
+    "name": "Carrd"
+  },
+  {
+    "pattern": ".framer.app",
+    "name": "Framer"
+  },
+  {
+    "pattern": ".webnode.com",
+    "name": "Webnode"
+  },
+  {
+    "pattern": ".cargo.site",
+    "name": "Cargo"
+  },
+  {
+    "pattern": ".zendesk.com",
+    "name": "Zendesk"
+  },
+  {
+    "pattern": ".freshdesk.com",
+    "name": "Freshdesk"
+  },
+  {
+    "pattern": ".stoplight.io",
+    "name": "Stoplight"
+  },
+  {
+    "pattern": ".getpostman.com",
+    "name": "Postman"
+  },
+  {
+    "pattern": ".readme.io",
+    "name": "ReadMe"
+  },
+  {
+    "pattern": ".redoc.ly",
+    "name": "Redocly"
+  },
+  {
+    "pattern": ".swaggerhub.com",
+    "name": "SwaggerHub"
+  },
+  {
+    "pattern": ".gitbook.io",
+    "name": "GitBook"
+  },
+  {
+    "pattern": ".notion.site",
+    "name": "Notion"
+  },
+  {
+    "pattern": ".statuspage.io",
+    "name": "Statuspage"
+  },
+  {
+    "pattern": ".atlassian.net",
+    "name": "Atlassian"
+  },
+  {
+    "pattern": ".linear.app",
+    "name": "Linear"
+  },
+  {
+    "pattern": ".intercom.io",
+    "name": "Intercom"
+  },
+  {
+    "pattern": ".launchdarkly.com",
+    "name": "LaunchDarkly"
+  },
+  {
+    "pattern": ".mybigcommerce.com",
+    "name": "BigCommerce"
+  },
+  {
+    "pattern": ".bigcommerce.com",
+    "name": "BigCommerce"
+  },
+  {
+    "pattern": ".teachable.com",
+    "name": "Teachable"
+  },
+  {
+    "pattern": ".thinkific.com",
+    "name": "Thinkific"
+  },
+  {
+    "pattern": ".mykajabi.com",
+    "name": "Kajabi"
+  },
+  {
+    "pattern": ".learnworlds.com",
+    "name": "LearnWorlds"
+  },
+  {
+    "pattern": ".podia.com",
+    "name": "Podia"
+  },
+  {
+    "pattern": ".bubble.io",
+    "name": "Bubble"
+  },
+  {
+    "pattern": ".softr.io",
+    "name": "Softr"
+  },
+  {
+    "pattern": ".retool.com",
+    "name": "Retool"
+  },
+  {
+    "pattern": ".typedream.com",
+    "name": "Typedream"
+  },
+  {
+    "pattern": ".clickfunnels.com",
+    "name": "ClickFunnels"
+  },
+  {
+    "pattern": ".landingi.com",
+    "name": "Landingi"
+  },
+  {
+    "pattern": ".surge.sh",
+    "name": "Surge.sh"
+  },
+  {
+    "pattern": ".unicornplatform.com",
+    "name": "Unicorn Platform"
+  },
+  {
+    "pattern": ".launchrock.com",
+    "name": "LaunchRock"
+  },
+  {
+    "pattern": ".myportfolio.com",
+    "name": "Adobe Portfolio"
+  },
+  {
+    "pattern": ".gcdn.co",
+    "name": "Gcore CDN"
+  },
+  {
+    "pattern": ".kxcdn.com",
+    "name": "KeyCDN"
+  },
+  {
+    "pattern": ".incapdns.net",
+    "name": "Imperva"
+  },
+  {
+    "pattern": ".discourse.com",
+    "name": "Discourse"
+  },
+  {
+    "pattern": ".mn.co",
+    "name": "Mighty Networks"
+  },
+  {
+    "pattern": ".canny.io",
+    "name": "Canny"
+  },
+  {
+    "pattern": ".uservoice.com",
+    "name": "UserVoice"
+  },
+  {
+    "pattern": ".bettermode.com",
+    "name": "Bettermode"
+  },
+  {
+    "pattern": ".tumblr.com",
+    "name": "Tumblr"
+  },
+  {
+    "pattern": ".hashnode.network",
+    "name": "Hashnode"
+  },
+  {
+    "pattern": ".substack.com",
+    "name": "Substack"
+  },
+  {
+    "pattern": ".ac-page.com",
+    "name": "ActiveCampaign"
+  },
+  {
+    "pattern": ".gr8.com",
+    "name": "GetResponse"
+  },
+  {
+    "pattern": ".helpscoutdocs.com",
+    "name": "Help Scout Docs"
+  },
+  {
+    "pattern": ".helpjuice.com",
+    "name": "Helpjuice"
+  },
+  {
+    "pattern": ".freshservice.com",
+    "name": "Freshservice"
+  },
+  {
+    "pattern": ".groovehq.help",
+    "name": "Groove"
+  },
+  {
+    "pattern": ".bitly.com",
+    "name": "Bitly"
+  },
+  {
+    "pattern": ".short.io",
+    "name": "Short.io"
+  },
+  {
+    "pattern": ".uptimerobot.com",
+    "name": "UptimeRobot"
+  },
+  {
+    "pattern": ".google.com",
+    "name": "Google"
+  },
+  {
+    "pattern": ".segment.com",
+    "name": "Segment"
+  },
+  {
+    "pattern": ".auth0.com",
+    "name": "Auth0"
+  },
+  {
+    "pattern": ".okta.com",
+    "name": "Okta"
+  },
+  {
+    "pattern": ".smugmug.com",
+    "name": "SmugMug"
+  },
+  {
+    "pattern": ".youtrack.cloud",
+    "name": "YouTrack"
+  },
+  {
+    "pattern": ".uberflip.com",
+    "name": "Uberflip"
+  },
+  {
+    "pattern": ".agilecrm.com",
+    "name": "Agile CRM"
+  }
+]

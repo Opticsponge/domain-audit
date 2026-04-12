@@ -1,0 +1,26 @@
+[
+  {
+    "pattern": "/wp-admin/",
+    "name": "WordPress"
+  },
+  {
+    "pattern": "/wp-login.php",
+    "name": "WordPress"
+  },
+  {
+    "pattern": "/wp-content/",
+    "name": "WordPress"
+  },
+  {
+    "pattern": "/administrator/",
+    "name": "Joomla"
+  },
+  {
+    "pattern": "/user/login",
+    "name": "Drupal"
+  },
+  {
+    "pattern": "/sites/default/",
+    "name": "Drupal"
+  }
+]

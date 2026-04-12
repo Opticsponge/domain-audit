@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import re
 import time
+from pathlib import Path
 from typing import Any, TypedDict, NotRequired
 
 import requests
@@ -20,7 +22,7 @@ _retry = RetryConfig(max_retries=2, timeout_per_attempt=10.0)
 
 class TechPattern(TypedDict):
     """A single custom detection pattern."""
-    pattern: str                    # substring (cdn/headers/paths) or regex (asset/inline)
+    pattern: str                    # substring (cdn/headers/paths/dns) or regex (asset/inline)
     name: str                       # technology name, e.g. "MyInternalCDN"
     category: NotRequired[str]      # display category; defaults to "Other"
 
@@ -48,17 +50,25 @@ class TechPatterns(TypedDict, total=False):
             ],
             "paths": [
                 {"pattern": "/my-admin/", "name": "MyPlatform"}
+            ],
+            "dns_txt": [
+                {"pattern": "myservice-verification", "name": "MyService"}
+            ],
+            "dns_cname": [
+                {"pattern": ".myplatform.com", "name": "MyPlatform"}
             ]
         }
     """
-    cdn_domains: list[TechPattern]      # matched as substring in asset URLs
-    asset_paths: list[TechPattern]      # matched as regex against asset URLs
-    inline_js: list[TechPattern]        # matched as regex against page HTML
-    headers: list[TechPattern]          # pattern = header name; empty name → use header value
-    paths: list[TechPattern]            # pattern = URL path substring to find in body
+    cdn_domains: list[TechPattern]
+    asset_paths: list[TechPattern]
+    inline_js: list[TechPattern]
+    headers: list[TechPattern]
+    paths: list[TechPattern]
+    dns_txt: list[TechPattern]
+    dns_cname: list[TechPattern]
 
 
-_VALID_PATTERN_KEYS = {"cdn_domains", "asset_paths", "inline_js", "headers", "paths"}
+_VALID_PATTERN_KEYS = {"cdn_domains", "asset_paths", "inline_js", "headers", "paths", "dns_txt", "dns_cname"}
 
 
 def _validate_custom_patterns(patterns: dict) -> None:
@@ -73,7 +83,6 @@ def _validate_custom_patterns(patterns: dict) -> None:
                 raise ValueError(
                     f"tech_patterns[{key!r}][{i}] must have 'pattern' and 'name' keys"
                 )
-            # Validate regex patterns compile
             if key in ("asset_paths", "inline_js"):
                 try:
                     re.compile(entry["pattern"])
@@ -84,261 +93,52 @@ def _validate_custom_patterns(patterns: dict) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  URL path probes (classic CMS detection)
+#  Load patterns from JSON files
+#
+#  Each file in tech_patterns/ is a standalone JSON array of
+#  {pattern, name} objects. Edit those files to add new detections.
 # ═══════════════════════════════════════════════════════════════════
 
-TECH_PATHS = {
-    "/wp-admin/": "WordPress",
-    "/wp-login.php": "WordPress",
-    "/wp-content/": "WordPress",
-    "/administrator/": "Joomla",
-    "/user/login": "Drupal",
-    "/sites/default/": "Drupal",
-}
+_PATTERNS_DIR = Path(__file__).parent / "tech_patterns"
 
-# ═══════════════════════════════════════════════════════════════════
-#  Response header fingerprints
-# ═══════════════════════════════════════════════════════════════════
 
-META_PATTERNS = {
-    r'<meta[^>]+name=["\']generator["\'][^>]+content=["\']([^"\']+)["\']': "generator",
-    r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']generator["\']': "generator",
-}
+def _load_json(filename: str) -> list[dict[str, str]]:
+    with open(_PATTERNS_DIR / filename) as f:
+        return json.load(f)
 
-HEADER_TECHS = {
-    "X-Powered-By": None,
-    "Server": None,
-    "X-Drupal-Cache": "Drupal",
-    "X-Generator": None,
-    "X-AspNet-Version": "ASP.NET",
-    "X-Shopify-Stage": "Shopify",
-}
 
-# ═══════════════════════════════════════════════════════════════════
-#  CDN / hosting domain → platform mapping
-# ═══════════════════════════════════════════════════════════════════
+def _load_tuples(filename: str) -> list[tuple[str, str]]:
+    """Load JSON array of {pattern, name} into list of (pattern, name) tuples."""
+    return [(e["pattern"], e["name"]) for e in _load_json(filename)]
 
-CDN_DOMAIN_MAP: list[tuple[str, str]] = [
-    # Website builders / CMS platforms
-    ("website-files.com", "Webflow"),
-    ("webflow.com", "Webflow"),
-    ("cdn.shopify.com", "Shopify"),
-    ("shopifycdn.com", "Shopify"),
-    ("squarespace.com", "Squarespace"),
-    ("sqspcdn.com", "Squarespace"),
-    ("wixstatic.com", "Wix"),
-    ("parastorage.com", "Wix"),
-    ("ghost.io", "Ghost"),
-    ("ghost.org", "Ghost"),
-    ("hubspot.com", "HubSpot"),
-    ("hubspot.net", "HubSpot"),
-    ("hs-scripts.com", "HubSpot"),
-    ("hsforms.com", "HubSpot"),
-    ("contentful.com", "Contentful"),
-    ("prismic.io", "Prismic"),
-    ("sanity.io", "Sanity"),
-    ("storyblok.com", "Storyblok"),
-    ("framer.com", "Framer"),
-    ("webnode.com", "Webnode"),
-    ("godaddy.com", "GoDaddy"),
-    ("carrd.co", "Carrd"),
 
-    # Hosting / infrastructure
-    ("netlify.app", "Netlify"),
-    ("netlify.com", "Netlify"),
-    ("vercel.app", "Vercel"),
-    ("vercel.com", "Vercel"),
-    ("herokuapp.com", "Heroku"),
-    ("cloudflare.com", "Cloudflare"),
-    ("cloudflareinsights.com", "Cloudflare"),
-    ("cdn-cgi/", "Cloudflare"),
-    ("amazonaws.com", "AWS"),
-    ("cloudfront.net", "AWS CloudFront"),
-    ("azurewebsites.net", "Azure"),
-    ("azureedge.net", "Azure CDN"),
-    ("azure.com", "Azure"),
-    ("googleusercontent.com", "Google Cloud"),
-    ("googleapis.com", "Google Cloud"),
-    ("firebase.com", "Firebase"),
-    ("firebaseapp.com", "Firebase"),
-    ("firebaseio.com", "Firebase"),
-    ("fastly.net", "Fastly"),
-    ("akamaized.net", "Akamai"),
-    ("akamai.net", "Akamai"),
-    ("edgecastcdn.net", "Edgecast"),
-    ("stackpathdns.com", "StackPath"),
-    ("digitaloceanspaces.com", "DigitalOcean"),
-    ("pages.dev", "Cloudflare Pages"),
-    ("workers.dev", "Cloudflare Workers"),
-    ("fly.dev", "Fly.io"),
-    ("render.com", "Render"),
-    ("railway.app", "Railway"),
-    ("supabase.co", "Supabase"),
-    ("supabase.com", "Supabase"),
-]
+def _load_dict(filename: str) -> dict[str, str | None]:
+    """Load JSON array of {pattern, name} into a dict. Empty name → None."""
+    return {e["pattern"]: (e["name"] or None) for e in _load_json(filename)}
 
-# ═══════════════════════════════════════════════════════════════════
-#  JS / CSS filename → framework / library detection
-# ═══════════════════════════════════════════════════════════════════
 
-ASSET_PATH_PATTERNS: list[tuple[str, str]] = [
-    # Frameworks
-    (r"[/.]react[.\-]", "React"),
-    (r"react[-.]dom", "React"),
-    (r"[/.]vue[.\-]", "Vue.js"),
-    (r"[/.]angular[.\-/]", "Angular"),
-    (r"[/.]svelte[.\-/]", "Svelte"),
-    (r"[/.]next[/.\-]", "Next.js"),
-    (r"/_next/", "Next.js"),
-    (r"[/.]nuxt[.\-/]", "Nuxt.js"),
-    (r"/_nuxt/", "Nuxt.js"),
-    (r"[/.]gatsby[.\-/]", "Gatsby"),
-    (r"[/.]remix[.\-/]", "Remix"),
-    (r"[/.]astro[.\-/]", "Astro"),
-    (r"[/.]ember[.\-/]", "Ember.js"),
-    (r"[/.]backbone[.\-/]", "Backbone.js"),
+def _load_categories() -> tuple[dict[str, set[str]], dict[str, str]]:
+    """Load categories.json and build both the map and the inverted lookup."""
+    with open(_PATTERNS_DIR / "categories.json") as f:
+        raw = json.load(f)
+    cat_map = {k: set(v) for k, v in raw.items()}
+    tech_to_cat: dict[str, str] = {}
+    for cat, techs in cat_map.items():
+        for t in techs:
+            tech_to_cat[t] = cat
+    return cat_map, tech_to_cat
 
-    # UI libraries
-    (r"[/.]jquery[.\-]", "jQuery"),
-    (r"[/.]bootstrap[.\-]", "Bootstrap"),
-    (r"[/.]tailwind[.\-]", "Tailwind CSS"),
-    (r"[/.]bulma[.\-]", "Bulma"),
-    (r"[/.]foundation[.\-]", "Foundation"),
-    (r"[/.]materialize[.\-]", "Materialize"),
-    (r"[/.]alpine[.\-]", "Alpine.js"),
-    (r"[/.]htmx[.\-]", "htmx"),
-    (r"[/.]stimulus[.\-]", "Stimulus"),
-    (r"[/.]turbo[.\-]", "Turbo"),
-    (r"[/.]livewire[.\-]", "Livewire"),
 
-    # Bundlers / runtimes
-    (r"[/.]webflow[.\-]", "Webflow"),
-    (r"[/.]webpack[.\-]", "Webpack"),
-    (r"[/.]vite[.\-]", "Vite"),
-
-    # Analytics / marketing
-    (r"gtag/js", "Google Tag Manager"),
-    (r"googletagmanager\.com", "Google Tag Manager"),
-    (r"google-analytics\.com", "Google Analytics"),
-    (r"analytics\.js", "Google Analytics"),
-    (r"fbevents\.js", "Facebook Pixel"),
-    (r"connect\.facebook\.net", "Facebook SDK"),
-    (r"snap\.licdn\.com", "LinkedIn Insight"),
-    (r"bat\.bing\.com", "Microsoft Clarity/Ads"),
-    (r"clarity\.ms", "Microsoft Clarity"),
-    (r"hotjar\.com", "Hotjar"),
-    (r"plausible\.io", "Plausible Analytics"),
-    (r"cdn\.segment\.com", "Segment"),
-    (r"mixpanel\.com", "Mixpanel"),
-    (r"amplitude\.com", "Amplitude"),
-    (r"heap-?analytics", "Heap"),
-    (r"fullstory\.com", "FullStory"),
-    (r"sentry[.\-]io", "Sentry"),
-    (r"datadoghq\.com", "Datadog"),
-    (r"logrocket\.com", "LogRocket"),
-
-    # Chat / support
-    (r"intercom\.io", "Intercom"),
-    (r"intercomcdn\.com", "Intercom"),
-    (r"crisp\.chat", "Crisp"),
-    (r"zendesk\.com", "Zendesk"),
-    (r"drift\.com", "Drift"),
-    (r"tawk\.to", "Tawk.to"),
-    (r"livechatinc\.com", "LiveChat"),
-    (r"freshdesk\.com", "Freshdesk"),
-
-    # Payments
-    (r"js\.stripe\.com", "Stripe"),
-    (r"paypal\.com/sdk", "PayPal"),
-    (r"square\.com", "Square"),
-
-    # Other SaaS
-    (r"recaptcha", "Google reCAPTCHA"),
-    (r"hcaptcha\.com", "hCaptcha"),
-    (r"turnstile", "Cloudflare Turnstile"),
-    (r"cookiebot\.com", "Cookiebot"),
-    (r"onetrust\.com", "OneTrust"),
-    (r"cookielaw\.org", "OneTrust"),
-    (r"typekit\.net", "Adobe Fonts"),
-    (r"fonts\.googleapis\.com", "Google Fonts"),
-    (r"use\.fontawesome\.com", "Font Awesome"),
-    (r"unpkg\.com", "unpkg CDN"),
-    (r"cdnjs\.cloudflare\.com", "cdnjs"),
-    (r"jsdelivr\.net", "jsDelivr"),
-]
-
-# ═══════════════════════════════════════════════════════════════════
-#  Inline JS global variable detection
-# ═══════════════════════════════════════════════════════════════════
-
-INLINE_JS_PATTERNS: list[tuple[str, str]] = [
-    (r"__NEXT_DATA__", "Next.js"),
-    (r"__NUXT__", "Nuxt.js"),
-    (r"__GATSBY", "Gatsby"),
-    (r"Shopify\.", "Shopify"),
-    (r"Webflow\.", "Webflow"),
-    (r"wp-content", "WordPress"),
-    (r"wp-includes", "WordPress"),
-    (r"wixBiSession", "Wix"),
-    (r"squarespace\.com", "Squarespace"),
-    (r"__remixContext", "Remix"),
-    (r"__astro", "Astro"),
-]
-
-# ═══════════════════════════════════════════════════════════════════
-#  Categorization
-# ═══════════════════════════════════════════════════════════════════
-
-_CATEGORY_MAP = {
-    "Server / Hosting": {
-        "nginx", "apache", "iis", "litespeed", "caddy", "openresty",
-        "cloudflare", "cloudflare pages", "cloudflare workers",
-        "aws", "aws cloudfront", "azure", "azure cdn", "google cloud",
-        "netlify", "vercel", "heroku", "digitalocean", "fly.io", "render",
-        "railway", "fastly", "akamai", "edgecast", "stackpath",
-        "firebase", "supabase", "godaddy",
-    },
-    "Framework / CMS": {
-        "react", "vue.js", "angular", "svelte", "next.js", "nuxt.js",
-        "gatsby", "remix", "astro", "ember.js", "backbone.js",
-        "wordpress", "joomla", "drupal", "shopify", "squarespace",
-        "wix", "webflow", "ghost", "framer", "webnode", "carrd",
-        "hubspot", "contentful", "prismic", "sanity", "storyblok",
-        "asp.net",
-    },
-    "UI / CSS": {
-        "jquery", "bootstrap", "tailwind css", "bulma", "foundation",
-        "materialize", "alpine.js", "htmx", "stimulus", "turbo",
-        "livewire", "google fonts", "adobe fonts", "font awesome",
-    },
-    "Analytics / Marketing": {
-        "google tag manager", "google analytics", "facebook pixel",
-        "facebook sdk", "linkedin insight", "microsoft clarity/ads",
-        "microsoft clarity", "hotjar", "plausible analytics", "segment",
-        "mixpanel", "amplitude", "heap", "fullstory",
-    },
-    "Developer Tools": {
-        "sentry", "datadog", "logrocket", "webpack", "vite",
-        "unpkg cdn", "cdnjs", "jsdelivr",
-    },
-    "Chat / Support": {
-        "intercom", "crisp", "zendesk", "drift", "tawk.to",
-        "livechat", "freshdesk",
-    },
-    "Payments": {
-        "stripe", "paypal", "square",
-    },
-    "Security / Compliance": {
-        "google recaptcha", "hcaptcha", "cloudflare turnstile",
-        "cookiebot", "onetrust",
-    },
-}
-
-# Invert for lookup
-_TECH_TO_CATEGORY: dict[str, str] = {}
-for _cat, _techs in _CATEGORY_MAP.items():
-    for _t in _techs:
-        _TECH_TO_CATEGORY[_t] = _cat
+# Load all patterns at import time (cached for performance)
+CDN_DOMAIN_MAP = _load_tuples("cdn_domains.json")
+ASSET_PATH_PATTERNS = _load_tuples("asset_paths.json")
+INLINE_JS_PATTERNS = _load_tuples("inline_js.json")
+DNS_TXT_PATTERNS = _load_tuples("dns_txt.json")
+DNS_CNAME_PATTERNS = _load_tuples("dns_cname.json")
+HEADER_TECHS = _load_dict("headers.json")
+TECH_PATHS = _load_dict("paths.json")
+META_PATTERNS = _load_dict("meta_tags.json")
+_CATEGORY_MAP, _TECH_TO_CATEGORY = _load_categories()
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -352,7 +152,6 @@ _SRC_RE = re.compile(
 
 
 def _extract_asset_urls(html: str) -> list[str]:
-    """Pull all src/href URLs from script, link, and img tags."""
     return _SRC_RE.findall(html)
 
 
@@ -361,31 +160,18 @@ def _detect_from_assets(
     cdn_map: list[tuple[str, str]],
     asset_patterns: list[tuple[str, str]],
 ) -> list[dict[str, str]]:
-    """Match asset URLs against CDN domains and path patterns."""
     hits: list[dict[str, str]] = []
     seen: set[str] = set()
-
     for url in urls:
         url_lower = url.lower()
-
         for domain_pattern, tech in cdn_map:
             if domain_pattern in url_lower and tech.lower() not in seen:
                 seen.add(tech.lower())
-                hits.append({
-                    "name": tech,
-                    "source": f"CDN domain: {domain_pattern}",
-                    "detail": _truncate_url(url),
-                })
-
+                hits.append({"name": tech, "source": f"CDN domain: {domain_pattern}", "detail": _trunc(url)})
         for pattern, tech in asset_patterns:
             if tech.lower() not in seen and re.search(pattern, url_lower):
                 seen.add(tech.lower())
-                hits.append({
-                    "name": tech,
-                    "source": "Asset URL pattern",
-                    "detail": _truncate_url(url),
-                })
-
+                hits.append({"name": tech, "source": "Asset URL pattern", "detail": _trunc(url)})
     return hits
 
 
@@ -393,40 +179,73 @@ def _detect_from_inline_js(
     html: str,
     js_patterns: list[tuple[str, str]],
 ) -> list[dict[str, str]]:
-    """Detect tech from inline JS globals and known markers."""
     hits: list[dict[str, str]] = []
     seen: set[str] = set()
-
     for pattern, tech in js_patterns:
         if tech.lower() not in seen and re.search(pattern, html):
             seen.add(tech.lower())
-            hits.append({
-                "name": tech,
-                "source": "Inline JS marker",
-                "detail": pattern.replace("\\", ""),
-            })
-
+            hits.append({"name": tech, "source": "Inline JS marker", "detail": pattern.replace("\\", "")})
     return hits
+
+
+def _detect_from_dns(
+    domain: str,
+    txt_patterns: list[tuple[str, str]],
+    cname_patterns: list[tuple[str, str]],
+) -> tuple[list[dict[str, str]], dict[str, Any]]:
+    import dns.resolver
+    import dns.exception
+
+    hits: list[dict[str, str]] = []
+    seen: set[str] = set()
+    raw: dict[str, Any] = {}
+
+    # TXT records
+    try:
+        answers = dns.resolver.resolve(domain, "TXT")
+        txt_records = [r.to_text().strip('"') for r in answers]
+        raw["txt_records"] = txt_records
+        for record in txt_records:
+            record_lower = record.lower()
+            for pattern, tech in txt_patterns:
+                if pattern.lower() in record_lower and tech.lower() not in seen:
+                    seen.add(tech.lower())
+                    hits.append({"name": tech, "source": "DNS TXT record", "detail": _trunc(record)})
+    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.exception.DNSException):
+        raw["txt_records"] = []
+
+    # CNAME record
+    try:
+        answers = dns.resolver.resolve(domain, "CNAME")
+        cname_targets = [r.to_text().rstrip(".") for r in answers]
+        raw["cname_targets"] = cname_targets
+        for target in cname_targets:
+            target_lower = target.lower()
+            for pattern, tech in cname_patterns:
+                if pattern in target_lower and tech.lower() not in seen:
+                    seen.add(tech.lower())
+                    hits.append({"name": tech, "source": "DNS CNAME target", "detail": target})
+    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.exception.DNSException):
+        raw["cname_targets"] = []
+
+    return hits, raw
 
 
 def _categorize(
     techs: list[dict[str, str]],
     extra_categories: dict[str, str] | None = None,
 ) -> dict[str, list[dict[str, str]]]:
-    """Group technologies into display categories."""
     groups: dict[str, list[dict[str, str]]] = {}
     for tech in techs:
         key = tech["name"].lower()
         cat = _TECH_TO_CATEGORY.get(key)
         if cat is None and extra_categories:
             cat = extra_categories.get(key)
-        if cat is None:
-            cat = "Other"
-        groups.setdefault(cat, []).append(tech)
+        groups.setdefault(cat or "Other", []).append(tech)
     return groups
 
 
-def _truncate_url(url: str, max_len: int = 120) -> str:
+def _trunc(url: str, max_len: int = 120) -> str:
     return url if len(url) <= max_len else url[:max_len] + "..."
 
 
@@ -434,53 +253,47 @@ def _truncate_url(url: str, max_len: int = 120) -> str:
 #  Pattern merging
 # ═══════════════════════════════════════════════════════════════════
 
-def _merge_patterns(custom_patterns: dict | None) -> tuple[
-    list[tuple[str, str]],       # cdn_map
-    list[tuple[str, str]],       # asset_patterns
-    list[tuple[str, str]],       # js_patterns
-    dict[str, str | None],       # header_techs
-    dict[str, str],              # tech_paths
-    dict[str, str],              # extra_categories
-]:
-    """Merge custom patterns into effective working copies of defaults."""
-    eff_cdn = list(CDN_DOMAIN_MAP)
-    eff_asset = list(ASSET_PATH_PATTERNS)
-    eff_inline = list(INLINE_JS_PATTERNS)
-    eff_headers = dict(HEADER_TECHS)
-    eff_paths = dict(TECH_PATHS)
-    extra_categories: dict[str, str] = {}
+class _EffectivePatterns:
+    __slots__ = ("cdn", "asset", "inline", "headers", "paths", "dns_txt", "dns_cname", "extra_categories")
 
+    def __init__(self) -> None:
+        self.cdn = list(CDN_DOMAIN_MAP)
+        self.asset = list(ASSET_PATH_PATTERNS)
+        self.inline = list(INLINE_JS_PATTERNS)
+        self.headers = dict(HEADER_TECHS)
+        self.paths = dict(TECH_PATHS)
+        self.dns_txt = list(DNS_TXT_PATTERNS)
+        self.dns_cname = list(DNS_CNAME_PATTERNS)
+        self.extra_categories: dict[str, str] = {}
+
+
+def _merge_patterns(custom_patterns: dict | None) -> _EffectivePatterns:
+    eff = _EffectivePatterns()
     if not custom_patterns:
-        return eff_cdn, eff_asset, eff_inline, eff_headers, eff_paths, extra_categories
+        return eff
 
     _validate_custom_patterns(custom_patterns)
 
+    def _add(name: str, entry: dict) -> None:
+        if "category" in entry and name:
+            eff.extra_categories[name.lower()] = entry["category"]
+
     for p in custom_patterns.get("cdn_domains", []):
-        eff_cdn.append((p["pattern"], p["name"]))
-        if "category" in p:
-            extra_categories[p["name"].lower()] = p["category"]
-
+        eff.cdn.append((p["pattern"], p["name"])); _add(p["name"], p)
     for p in custom_patterns.get("asset_paths", []):
-        eff_asset.append((p["pattern"], p["name"]))
-        if "category" in p:
-            extra_categories[p["name"].lower()] = p["category"]
-
+        eff.asset.append((p["pattern"], p["name"])); _add(p["name"], p)
     for p in custom_patterns.get("inline_js", []):
-        eff_inline.append((p["pattern"], p["name"]))
-        if "category" in p:
-            extra_categories[p["name"].lower()] = p["category"]
-
+        eff.inline.append((p["pattern"], p["name"])); _add(p["name"], p)
     for p in custom_patterns.get("headers", []):
-        eff_headers[p["pattern"]] = p["name"] or None
-        if "category" in p and p["name"]:
-            extra_categories[p["name"].lower()] = p["category"]
-
+        eff.headers[p["pattern"]] = p["name"] or None; _add(p["name"], p)
     for p in custom_patterns.get("paths", []):
-        eff_paths[p["pattern"]] = p["name"]
-        if "category" in p:
-            extra_categories[p["name"].lower()] = p["category"]
+        eff.paths[p["pattern"]] = p["name"]; _add(p["name"], p)
+    for p in custom_patterns.get("dns_txt", []):
+        eff.dns_txt.append((p["pattern"], p["name"])); _add(p["name"], p)
+    for p in custom_patterns.get("dns_cname", []):
+        eff.dns_cname.append((p["pattern"], p["name"])); _add(p["name"], p)
 
-    return eff_cdn, eff_asset, eff_inline, eff_headers, eff_paths, extra_categories
+    return eff
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -504,56 +317,50 @@ def scan(domain: str, custom_patterns: dict | None = None) -> ScanResult:
     technologies: list[dict[str, str]] = []
     raw_data: dict[str, Any] = {}
 
-    # Merge custom patterns into effective lists
-    eff_cdn, eff_asset, eff_inline, eff_headers, eff_paths, extra_cats = _merge_patterns(custom_patterns)
+    eff = _merge_patterns(custom_patterns)
+
+    # 1. DNS records (independent of HTTP)
+    try:
+        dns_hits, dns_raw = _detect_from_dns(domain, eff.dns_txt, eff.dns_cname)
+        technologies.extend(dns_hits)
+        raw_data["dns_detection"] = dns_raw
+    except Exception:
+        raw_data["dns_detection"] = {"error": "DNS query failed"}
 
     try:
         headers, body = _fetch_page(domain)
         raw_data["response_headers"] = headers
 
-        # 1. Response headers
-        for header_name, tech_name in eff_headers.items():
+        # 2. Response headers
+        for header_name, tech_name in eff.headers.items():
             value = next(
                 (v for k, v in headers.items() if k.lower() == header_name.lower()),
                 None,
             )
             if value:
                 tech = tech_name or value.split("/")[0].strip()
-                technologies.append({
-                    "name": tech,
-                    "source": f"Header: {header_name}",
-                    "detail": value,
-                })
+                technologies.append({"name": tech, "source": f"Header: {header_name}", "detail": value})
 
-        # 2. Meta tags
+        # 3. Meta tags
         for pattern, tag_type in META_PATTERNS.items():
             match = re.search(pattern, body, re.IGNORECASE)
             if match:
-                technologies.append({
-                    "name": match.group(1).strip(),
-                    "source": f"Meta tag: {tag_type}",
-                    "detail": match.group(1).strip(),
-                })
+                technologies.append({"name": match.group(1).strip(), "source": f"Meta tag: {tag_type}", "detail": match.group(1).strip()})
 
-        # 3. Known URL paths in body (classic CMS probing)
-        for path, tech_name in eff_paths.items():
-            if path in body:
-                if not any(t["name"] == tech_name for t in technologies):
-                    technologies.append({
-                        "name": tech_name,
-                        "source": f"URL pattern: {path}",
-                        "detail": f"Found {path} reference in page",
-                    })
+        # 4. URL paths in body
+        for path, tech_name in eff.paths.items():
+            if path in body and not any(t["name"] == tech_name for t in technologies):
+                technologies.append({"name": tech_name, "source": f"URL pattern: {path}", "detail": f"Found {path} reference in page"})
 
-        # 4. Asset URL analysis (scripts, stylesheets, images)
+        # 5. Asset URL fingerprinting
         asset_urls = _extract_asset_urls(body)
         raw_data["asset_urls_scanned"] = len(asset_urls)
-        technologies.extend(_detect_from_assets(asset_urls, eff_cdn, eff_asset))
+        technologies.extend(_detect_from_assets(asset_urls, eff.cdn, eff.asset))
 
-        # 5. Inline JS globals / markers
-        technologies.extend(_detect_from_inline_js(body, eff_inline))
+        # 6. Inline JS markers
+        technologies.extend(_detect_from_inline_js(body, eff.inline))
 
-        # Deduplicate by name (keep first seen)
+        # Deduplicate
         seen: set[str] = set()
         unique_techs: list[dict[str, str]] = []
         for tech in technologies:
@@ -566,19 +373,12 @@ def scan(domain: str, custom_patterns: dict | None = None) -> ScanResult:
         if custom_patterns:
             raw_data["custom_patterns_applied"] = True
 
-        # Group by category for display
-        categories = _categorize(unique_techs, extra_cats)
+        categories = _categorize(unique_techs, eff.extra_categories)
         findings: list[dict[str, Any]] = []
 
         for category, techs in categories.items():
             names = ", ".join(t["name"] for t in techs)
-            findings.append({
-                "label": category,
-                "value": [t["name"] for t in techs],
-                "grade": "-",
-                "detail": names,
-                "fix": "",
-            })
+            findings.append({"label": category, "value": [t["name"] for t in techs], "grade": "-", "detail": names, "fix": ""})
 
         if not findings:
             findings.append({
@@ -590,28 +390,15 @@ def scan(domain: str, custom_patterns: dict | None = None) -> ScanResult:
             })
 
         return ScanResult(
-            module="tech",
-            status="pass",
-            grade="-",
-            findings=findings,
-            raw_data=raw_data,
-            elapsed=time.time() - start,
-            retries=0,
+            module="tech", status="pass", grade="-",
+            findings=findings, raw_data=raw_data,
+            elapsed=time.time() - start, retries=0,
         )
 
     except Exception as exc:
         return ScanResult(
-            module="tech",
-            status="error",
-            grade="?",
-            findings=[{
-                "label": "Technology detection",
-                "value": f"Error: {safe_error(exc)}",
-                "grade": "?",
-                "detail": f"Could not detect technologies: {safe_error(exc)}",
-                "fix": "",
-            }],
+            module="tech", status="error", grade="?",
+            findings=[{"label": "Technology detection", "value": f"Error: {safe_error(exc)}", "grade": "?", "detail": f"Could not detect technologies: {safe_error(exc)}", "fix": ""}],
             raw_data={"error": safe_error(exc)},
-            elapsed=time.time() - start,
-            retries=0,
+            elapsed=time.time() - start, retries=0,
         )

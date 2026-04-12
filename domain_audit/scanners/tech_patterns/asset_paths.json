@@ -1,0 +1,282 @@
+[
+  {
+    "pattern": "[/.]react[.\\-]",
+    "name": "React"
+  },
+  {
+    "pattern": "react[-.]dom",
+    "name": "React"
+  },
+  {
+    "pattern": "[/.]vue[.\\-]",
+    "name": "Vue.js"
+  },
+  {
+    "pattern": "[/.]angular[.\\-/]",
+    "name": "Angular"
+  },
+  {
+    "pattern": "[/.]svelte[.\\-/]",
+    "name": "Svelte"
+  },
+  {
+    "pattern": "[/.]next[/.\\-]",
+    "name": "Next.js"
+  },
+  {
+    "pattern": "/_next/",
+    "name": "Next.js"
+  },
+  {
+    "pattern": "[/.]nuxt[.\\-/]",
+    "name": "Nuxt.js"
+  },
+  {
+    "pattern": "/_nuxt/",
+    "name": "Nuxt.js"
+  },
+  {
+    "pattern": "[/.]gatsby[.\\-/]",
+    "name": "Gatsby"
+  },
+  {
+    "pattern": "[/.]remix[.\\-/]",
+    "name": "Remix"
+  },
+  {
+    "pattern": "[/.]astro[.\\-/]",
+    "name": "Astro"
+  },
+  {
+    "pattern": "[/.]ember[.\\-/]",
+    "name": "Ember.js"
+  },
+  {
+    "pattern": "[/.]backbone[.\\-/]",
+    "name": "Backbone.js"
+  },
+  {
+    "pattern": "[/.]jquery[.\\-]",
+    "name": "jQuery"
+  },
+  {
+    "pattern": "[/.]bootstrap[.\\-]",
+    "name": "Bootstrap"
+  },
+  {
+    "pattern": "[/.]tailwind[.\\-]",
+    "name": "Tailwind CSS"
+  },
+  {
+    "pattern": "[/.]bulma[.\\-]",
+    "name": "Bulma"
+  },
+  {
+    "pattern": "[/.]foundation[.\\-]",
+    "name": "Foundation"
+  },
+  {
+    "pattern": "[/.]materialize[.\\-]",
+    "name": "Materialize"
+  },
+  {
+    "pattern": "[/.]alpine[.\\-]",
+    "name": "Alpine.js"
+  },
+  {
+    "pattern": "[/.]htmx[.\\-]",
+    "name": "htmx"
+  },
+  {
+    "pattern": "[/.]stimulus[.\\-]",
+    "name": "Stimulus"
+  },
+  {
+    "pattern": "[/.]turbo[.\\-]",
+    "name": "Turbo"
+  },
+  {
+    "pattern": "[/.]livewire[.\\-]",
+    "name": "Livewire"
+  },
+  {
+    "pattern": "[/.]webflow[.\\-]",
+    "name": "Webflow"
+  },
+  {
+    "pattern": "[/.]webpack[.\\-]",
+    "name": "Webpack"
+  },
+  {
+    "pattern": "[/.]vite[.\\-]",
+    "name": "Vite"
+  },
+  {
+    "pattern": "gtag/js",
+    "name": "Google Tag Manager"
+  },
+  {
+    "pattern": "googletagmanager\\.com",
+    "name": "Google Tag Manager"
+  },
+  {
+    "pattern": "google-analytics\\.com",
+    "name": "Google Analytics"
+  },
+  {
+    "pattern": "analytics\\.js",
+    "name": "Google Analytics"
+  },
+  {
+    "pattern": "fbevents\\.js",
+    "name": "Facebook Pixel"
+  },
+  {
+    "pattern": "connect\\.facebook\\.net",
+    "name": "Facebook SDK"
+  },
+  {
+    "pattern": "snap\\.licdn\\.com",
+    "name": "LinkedIn Insight"
+  },
+  {
+    "pattern": "bat\\.bing\\.com",
+    "name": "Microsoft Clarity/Ads"
+  },
+  {
+    "pattern": "clarity\\.ms",
+    "name": "Microsoft Clarity"
+  },
+  {
+    "pattern": "hotjar\\.com",
+    "name": "Hotjar"
+  },
+  {
+    "pattern": "plausible\\.io",
+    "name": "Plausible Analytics"
+  },
+  {
+    "pattern": "cdn\\.segment\\.com",
+    "name": "Segment"
+  },
+  {
+    "pattern": "mixpanel\\.com",
+    "name": "Mixpanel"
+  },
+  {
+    "pattern": "amplitude\\.com",
+    "name": "Amplitude"
+  },
+  {
+    "pattern": "heap-?analytics",
+    "name": "Heap"
+  },
+  {
+    "pattern": "fullstory\\.com",
+    "name": "FullStory"
+  },
+  {
+    "pattern": "sentry[.\\-]io",
+    "name": "Sentry"
+  },
+  {
+    "pattern": "datadoghq\\.com",
+    "name": "Datadog"
+  },
+  {
+    "pattern": "logrocket\\.com",
+    "name": "LogRocket"
+  },
+  {
+    "pattern": "intercom\\.io",
+    "name": "Intercom"
+  },
+  {
+    "pattern": "intercomcdn\\.com",
+    "name": "Intercom"
+  },
+  {
+    "pattern": "crisp\\.chat",
+    "name": "Crisp"
+  },
+  {
+    "pattern": "zendesk\\.com",
+    "name": "Zendesk"
+  },
+  {
+    "pattern": "drift\\.com",
+    "name": "Drift"
+  },
+  {
+    "pattern": "tawk\\.to",
+    "name": "Tawk.to"
+  },
+  {
+    "pattern": "livechatinc\\.com",
+    "name": "LiveChat"
+  },
+  {
+    "pattern": "freshdesk\\.com",
+    "name": "Freshdesk"
+  },
+  {
+    "pattern": "js\\.stripe\\.com",
+    "name": "Stripe"
+  },
+  {
+    "pattern": "paypal\\.com/sdk",
+    "name": "PayPal"
+  },
+  {
+    "pattern": "square\\.com",
+    "name": "Square"
+  },
+  {
+    "pattern": "recaptcha",
+    "name": "Google reCAPTCHA"
+  },
+  {
+    "pattern": "hcaptcha\\.com",
+    "name": "hCaptcha"
+  },
+  {
+    "pattern": "turnstile",
+    "name": "Cloudflare Turnstile"
+  },
+  {
+    "pattern": "cookiebot\\.com",
+    "name": "Cookiebot"
+  },
+  {
+    "pattern": "onetrust\\.com",
+    "name": "OneTrust"
+  },
+  {
+    "pattern": "cookielaw\\.org",
+    "name": "OneTrust"
+  },
+  {
+    "pattern": "typekit\\.net",
+    "name": "Adobe Fonts"
+  },
+  {
+    "pattern": "fonts\\.googleapis\\.com",
+    "name": "Google Fonts"
+  },
+  {
+    "pattern": "use\\.fontawesome\\.com",
+    "name": "Font Awesome"
+  },
+  {
+    "pattern": "unpkg\\.com",
+    "name": "unpkg CDN"
+  },
+  {
+    "pattern": "cdnjs\\.cloudflare\\.com",
+    "name": "cdnjs"
+  },
+  {
+    "pattern": "jsdelivr\\.net",
+    "name": "jsDelivr"
+  }
+]

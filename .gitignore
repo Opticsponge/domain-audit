@@ -14,3 +14,4 @@ env/
 .mypy_cache/
 *.so
 .DS_Store
+docs/superpowers/

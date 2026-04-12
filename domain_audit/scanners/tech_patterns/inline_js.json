@@ -1,0 +1,46 @@
+[
+  {
+    "pattern": "__NEXT_DATA__",
+    "name": "Next.js"
+  },
+  {
+    "pattern": "__NUXT__",
+    "name": "Nuxt.js"
+  },
+  {
+    "pattern": "__GATSBY",
+    "name": "Gatsby"
+  },
+  {
+    "pattern": "Shopify\\.",
+    "name": "Shopify"
+  },
+  {
+    "pattern": "Webflow\\.",
+    "name": "Webflow"
+  },
+  {
+    "pattern": "wp-content",
+    "name": "WordPress"
+  },
+  {
+    "pattern": "wp-includes",
+    "name": "WordPress"
+  },
+  {
+    "pattern": "wixBiSession",
+    "name": "Wix"
+  },
+  {
+    "pattern": "squarespace\\.com",
+    "name": "Squarespace"
+  },
+  {
+    "pattern": "__remixContext",
+    "name": "Remix"
+  },
+  {
+    "pattern": "__astro",
+    "name": "Astro"
+  }
+]
