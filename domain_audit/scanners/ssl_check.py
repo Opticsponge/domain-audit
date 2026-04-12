@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from domain_audit.grader import ScanResult
+from domain_audit.grader import ScanResult, worst_grade
 from domain_audit.retry import RetryConfig, with_retry
 
 _retry = RetryConfig(max_retries=3, timeout_per_attempt=10.0)
@@ -116,7 +116,7 @@ def scan(domain: str) -> ScanResult:
         })
 
         grades = [f["grade"] for f in findings if f["grade"] not in ("?", "-")]
-        module_grade = _worst_grade(grades) if grades else "?"
+        module_grade = worst_grade(grades) if grades else "?"
         status = "pass" if module_grade == "A" else "warn" if module_grade in ("B", "C") else "fail"
 
         return ScanResult(
@@ -152,10 +152,3 @@ def _hostname_matches(domain: str, san: str) -> bool:
         wildcard_base = san[2:]
         return domain == wildcard_base or domain.endswith(f".{wildcard_base}")
     return domain == san
-
-
-def _worst_grade(grades: list[str]) -> str:
-    order = {"F": 0, "C": 1, "B": 2, "A": 3}
-    if not grades:
-        return "?"
-    return min(grades, key=lambda g: order.get(g, -1))

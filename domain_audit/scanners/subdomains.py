@@ -62,15 +62,23 @@ def _probe_subdomain(sub: str) -> dict[str, Any]:
     return result
 
 
+_retry_probe = RetryConfig(max_retries=1, base_delay=0.5, timeout_per_attempt=5.0)
+
+
 def _probe_dns(sub: str) -> dict[str, Any]:
-    """Resolve A/AAAA/CNAME for a subdomain."""
+    """Resolve A/AAAA/CNAME for a subdomain with retry."""
     data: dict[str, Any] = {"a": [], "aaaa": [], "cname": []}
     for rdtype in ("A", "AAAA", "CNAME"):
-        try:
-            answers = dns.resolver.resolve(sub, rdtype, lifetime=5.0)
-            data[rdtype.lower()] = [str(rdata) for rdata in answers]
-        except Exception:
-            pass
+        for attempt in range(2):  # 1 retry
+            try:
+                answers = dns.resolver.resolve(sub, rdtype, lifetime=5.0)
+                data[rdtype.lower()] = [str(rdata) for rdata in answers]
+                break
+            except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers):
+                break  # No point retrying these
+            except Exception:
+                if attempt == 0:
+                    continue  # Retry on transient errors
     return data
 
 

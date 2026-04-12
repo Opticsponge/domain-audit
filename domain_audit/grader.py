@@ -28,8 +28,7 @@ MODULE_WEIGHTS = {
     "headers": 0.15,
     "whois": 0.10,
     "ports": 0.10,
-    "tech": 0.05,
-    "subdomains": 0.05,
+    # tech and subdomains are informational — weights here for completeness only
 }
 
 # Informational modules don't contribute to overall grade
@@ -93,3 +92,14 @@ def _grade_to_severity(grade: str) -> str:
         "C": "HIGH",
         "B": "MEDIUM",
     }.get(grade, "LOW")
+
+
+_GRADE_ORDER = {"F": 0, "C": 1, "B": 2, "A": 3}
+
+
+def worst_grade(grades: list[str]) -> str:
+    """Return the worst letter grade from a list. Ignores '?' and '-'."""
+    valid = [g for g in grades if g in _GRADE_ORDER]
+    if not valid:
+        return "?"
+    return min(valid, key=lambda g: _GRADE_ORDER[g])

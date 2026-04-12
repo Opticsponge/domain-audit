@@ -125,7 +125,7 @@ def scan(domain: str) -> ScanResult:
             "label": "Open ports",
             "value": open_ports,
             "grade": "-",
-            "detail": f"{len(open_ports)} port(s) open: {', '.join(f'{p['port']}/{p['service']}' for p in open_ports)}",
+            "detail": "{} port(s) open: {}".format(len(open_ports), ", ".join("{}/{}".format(p["port"], p["service"]) for p in open_ports)),
             "fix": "",
         })
     else:

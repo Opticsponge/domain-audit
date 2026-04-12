@@ -212,13 +212,13 @@ def scan(domain: str) -> ScanResult:
         raw_data["headers"] = response_headers
         present_count = 0
 
+        # Build lowercase lookup once
+        headers_lower = {k.lower(): v for k, v in response_headers.items()}
+
         # ── Security headers check ──
         for header_name, meta in SECURITY_HEADERS.items():
-            found = header_name.lower() in {k.lower(): v for k, v in response_headers.items()}
-            header_value = next(
-                (v for k, v in response_headers.items() if k.lower() == header_name.lower()),
-                None,
-            )
+            found = header_name.lower() in headers_lower
+            header_value = headers_lower.get(header_name.lower())
 
             if found:
                 present_count += 1
@@ -299,6 +299,7 @@ def scan(domain: str) -> ScanResult:
         # ── Cookie security ──
         cookie_check = _check_cookies(domain)
         raw_data["cookies"] = cookie_check
+        cookie_grade = "-"
 
         if cookie_check["cookies"]:
             insecure_count = sum(1 for c in cookie_check["cookies"] if c["issues"])

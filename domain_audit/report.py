@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import html as html_mod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from domain_audit.core import AuditResult
+
+
+def _esc(text: str) -> str:
+    """HTML-escape user-controlled strings to prevent XSS."""
+    return html_mod.escape(str(text)) if text else ""
 
 GRADE_COLORS = {
     "A": "green",
@@ -307,7 +313,7 @@ def _colab_data_table(table_type: str, table_data: list[dict]) -> str:
             </tr>"""
         for row in table_data:
             html += f"""<tr>
-                <td style="{tds}color:#58a6ff;font-family:monospace;">{row['subdomain']}</td>
+                <td style="{tds}color:#58a6ff;font-family:monospace;">{_esc(row['subdomain'])}</td>
                 <td style="{tds}font-family:monospace;">{row['a_records']}</td>
                 <td style="{tds}font-family:monospace;">{row['aaaa_records']}</td>
                 <td style="{tds}font-family:monospace;">{row['cname']}</td>
@@ -330,7 +336,7 @@ def _colab_data_table(table_type: str, table_data: list[dict]) -> str:
             gc = GRADE_COLORS_HTML.get(row.get("grade", "-"), "#6b7280")
             valid_color = "#22c55e" if row["valid"] == "Yes" else "#ef4444" if row["valid"] == "No" else "#6b7280"
             html += f"""<tr>
-                <td style="{tds}color:#58a6ff;font-family:monospace;">{row['subdomain']}</td>
+                <td style="{tds}color:#58a6ff;font-family:monospace;">{_esc(row['subdomain'])}</td>
                 <td style="{tds}font-family:monospace;">{row['ip']}</td>
                 <td style="{tds}color:{valid_color};font-weight:bold;">{row['valid']}</td>
                 <td style="{tds}">{row['issuer']}</td>
@@ -356,7 +362,7 @@ def _colab_data_table(table_type: str, table_data: list[dict]) -> str:
             https_color = "#22c55e" if row["https"] == "Yes" else "#ef4444" if row["reachable"] == "Yes" else "#6b7280"
             ms = row.get("response_ms", "-")
             html += f"""<tr>
-                <td style="{tds}color:#58a6ff;font-family:monospace;">{row['subdomain']}</td>
+                <td style="{tds}color:#58a6ff;font-family:monospace;">{_esc(row['subdomain'])}</td>
                 <td style="{tds}">{row['reachable']}</td>
                 <td style="{tds}color:{https_color};font-weight:bold;">{row['https']}</td>
                 <td style="{tds}">{row['status']}</td>
@@ -371,13 +377,12 @@ def _colab_data_table(table_type: str, table_data: list[dict]) -> str:
 
 
 def _display_colab(result: AuditResult) -> None:
-    import random
+    import uuid
     from IPython.display import display as ipy_display, HTML
 
-    domain = result.domain
+    domain = _esc(result.domain)
     grade_color = GRADE_COLORS_HTML.get(result.overall_grade, "#6b7280")
-    # Unique ID so multiple audits on one page don't collide
-    uid = f"da{random.randint(10000,99999)}"
+    uid = f"da{uuid.uuid4().hex[:8]}"
 
     # ── Summary table rows ──
     summary_rows = ""
@@ -398,7 +403,7 @@ def _display_colab(result: AuditResult) -> None:
         if issue_count > 0:
             summary = f'<span style="color:{color};">{issue_count} issue(s)</span>'
         else:
-            summary = f'<span style="color:#8b949e;">{r.findings[0].get("detail", "") if r.findings else "OK"}</span>'
+            summary = f'<span style="color:#8b949e;">{_esc(r.findings[0].get("detail", "")) if r.findings else "OK"}</span>'
 
         summary_rows += f"""
         <tr style="cursor:pointer;border-bottom:1px solid #21262d;" onclick="var d=document.getElementById('{uid}_{mod}');d.style.display=d.style.display==='none'?'block':'none';">
@@ -426,15 +431,15 @@ def _display_colab(result: AuditResult) -> None:
         for f in r.findings:
             fg = f.get("grade", "-")
             fc = GRADE_COLORS_HTML.get(fg, "#6b7280")
-            detail = f.get("detail", "")
-            fix = f.get("fix", "")
+            detail = _esc(f.get("detail", ""))
+            fix = _esc(f.get("fix", ""))
             parsed = f.get("parsed_record", [])
             tests = f.get("tests", [])
 
             # If finding has parsed record + tests, render MXToolbox-style
             if tests:
-                rec_type = f.get("record_type", f.get("label", ""))
-                raw_val = f.get("value", "")
+                rec_type = _esc(f.get("record_type", f.get("label", "")))
+                raw_val = _esc(str(f.get("value", "")) if not isinstance(f.get("value"), str) else f.get("value", ""))
 
                 findings_html += f"""
                 <div style="margin:8px;padding:12px;background:#161b22;border-radius:8px;border-left:3px solid {fc};">
@@ -462,15 +467,15 @@ def _display_colab(result: AuditResult) -> None:
                             <th style="padding:6px 8px;text-align:left;color:#8b949e;">Description</th>
                         </tr>"""
                     for row in parsed:
-                        val_display = row['value']
+                        val_display = _esc(row['value'])
                         if len(val_display) > 60:
                             val_display = val_display[:57] + "..."
                         findings_html += f"""
                         <tr style="border-bottom:1px solid #21262d;">
-                            <td style="padding:5px 8px;color:#58a6ff;font-family:monospace;">{row['tag']}</td>
+                            <td style="padding:5px 8px;color:#58a6ff;font-family:monospace;">{_esc(row['tag'])}</td>
                             <td style="padding:5px 8px;font-family:monospace;word-break:break-all;">{val_display}</td>
-                            <td style="padding:5px 8px;font-weight:bold;">{row['name']}</td>
-                            <td style="padding:5px 8px;color:#8b949e;">{row['description']}</td>
+                            <td style="padding:5px 8px;font-weight:bold;">{_esc(row['name'])}</td>
+                            <td style="padding:5px 8px;color:#8b949e;">{_esc(row['description'])}</td>
                         </tr>"""
                     findings_html += "</table>"
 
@@ -489,8 +494,8 @@ def _display_colab(result: AuditResult) -> None:
                         findings_html += f"""
                         <tr style="border-bottom:1px solid #21262d;background:{'#0d1117' if t['pass'] else '#1a0d0d'};">
                             <td style="padding:6px 8px;text-align:center;">{icon}</td>
-                            <td style="padding:6px 8px;font-weight:bold;">{t['test']}</td>
-                            <td style="padding:6px 8px;color:{result_color};">{t['result']}</td>
+                            <td style="padding:6px 8px;font-weight:bold;">{_esc(t['test'])}</td>
+                            <td style="padding:6px 8px;color:{result_color};">{_esc(t['result'])}</td>
                         </tr>"""
                     findings_html += "</table>"
 
@@ -554,13 +559,13 @@ def _display_colab(result: AuditResult) -> None:
             sev = item["severity"]
             sev_color = SEVERITY_COLORS_HTML.get(sev, "#6b7280")
             mod_label = MODULE_LABELS.get(item.get("module", ""), item.get("module", ""))
-            fix = item.get("fix", "")
+            fix = _esc(item.get("fix", ""))
 
             items_html += f"""
             <div style="margin:6px 0;padding:10px 12px;background:#0d1117;border:1px solid #21262d;border-left:3px solid {sev_color};border-radius:0 6px 6px 0;">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
                     <span style="color:{sev_color};font-weight:bold;font-size:10px;text-transform:uppercase;letter-spacing:1px;padding:2px 6px;background:{sev_color}18;border-radius:3px;">{sev}</span>
-                    <span style="font-weight:bold;font-size:13px;">{item['issue']}</span>
+                    <span style="font-weight:bold;font-size:13px;">{_esc(item['issue'])}</span>
                 </div>
                 <div style="color:#8b949e;font-size:12px;margin-left:4px;">{domain} &rsaquo; {mod_label}</div>
                 {"<div style='color:#58a6ff;font-size:12px;margin-top:4px;margin-left:4px;'>Fix: " + fix + "</div>" if fix else ""}

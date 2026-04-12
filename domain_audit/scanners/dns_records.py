@@ -9,7 +9,7 @@ import dns.query
 import dns.zone
 import dns.rdatatype
 
-from domain_audit.grader import ScanResult
+from domain_audit.grader import ScanResult, worst_grade
 from domain_audit.retry import RetryConfig, with_retry
 
 RECORD_TYPES = ["A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA", "SRV", "CAA"]
@@ -190,7 +190,7 @@ def scan(domain: str) -> ScanResult:
         })
 
     grades = [f["grade"] for f in findings if f["grade"] not in ("?", "-")]
-    module_grade = _worst_grade(grades) if grades else "?"
+    module_grade = worst_grade(grades) if grades else "?"
     status = "pass" if module_grade == "A" else "warn" if module_grade in ("B", "C") else "fail"
 
     return ScanResult(
@@ -226,8 +226,3 @@ def _fix_suggestion(rdtype: str) -> str:
     return suggestions.get(rdtype, "")
 
 
-def _worst_grade(grades: list[str]) -> str:
-    order = {"F": 0, "C": 1, "B": 2, "A": 3}
-    if not grades:
-        return "?"
-    return min(grades, key=lambda g: order.get(g, -1))

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
@@ -42,20 +43,25 @@ class AuditResult:
             json.dump(self.to_dict(), f, indent=2, default=str)
 
     def to_csv(self, path: str) -> None:
-        import csv
         with open(path, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["module", "grade", "status", "finding", "detail", "fix"])
-            for name, result in self.results.items():
-                for finding in result.findings:
-                    writer.writerow([
-                        name,
-                        finding.get("grade", "-"),
-                        result.status,
-                        finding.get("label", ""),
-                        finding.get("detail", ""),
-                        finding.get("fix", ""),
-                    ])
+            f.write(self.to_csv_string())
+
+    def to_csv_string(self) -> str:
+        import csv
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["module", "grade", "status", "finding", "detail", "fix"])
+        for name, result in self.results.items():
+            for finding in result.findings:
+                writer.writerow([
+                    name,
+                    finding.get("grade", "-"),
+                    result.status,
+                    finding.get("label", ""),
+                    finding.get("detail", ""),
+                    finding.get("fix", ""),
+                ])
+        return buf.getvalue()
 
     def __repr__(self) -> str:
         return f"AuditResult(domain={self.domain!r}, grade={self.overall_grade!r})"
@@ -65,6 +71,7 @@ def audit(
     domain: str,
     only: list[str] | None = None,
     max_workers: int = 8,
+    show: bool = True,
 ) -> AuditResult:
     start = time.time()
 
@@ -114,8 +121,8 @@ def audit(
         elapsed=elapsed,
     )
 
-    # Auto-display in Colab or terminal
-    from domain_audit.report import display
-    display(audit_result)
+    if show:
+        from domain_audit.report import display
+        display(audit_result)
 
     return audit_result

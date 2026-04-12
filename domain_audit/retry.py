@@ -21,6 +21,7 @@ class RetryConfig:
         socket.timeout,
         OSError,
     )
+    # Not enforced by the decorator — scanners pass this to their network calls directly
     timeout_per_attempt: float = 10.0
 
 

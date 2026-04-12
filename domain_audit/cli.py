@@ -28,17 +28,6 @@ def main() -> None:
         help="Output file path (for json/csv formats)",
         default=None,
     )
-    parser.add_argument(
-        "--timeout",
-        type=float,
-        default=None,
-        help="Override default timeout per scanner (seconds)",
-    )
-    parser.add_argument(
-        "--no-color",
-        action="store_true",
-        help="Disable colored output",
-    )
 
     args = parser.parse_args()
 
@@ -50,15 +39,7 @@ def main() -> None:
     from domain_audit.core import audit
 
     if args.format == "json":
-        # Suppress auto-display for JSON output
-        import domain_audit.report as report
-        original_display = report.display
-        report.display = lambda r: None
-
-        result = audit(domain, only=only)
-
-        report.display = original_display
-
+        result = audit(domain, only=only, show=False)
         data = json.dumps(result.to_dict(), indent=2, default=str)
         if args.output:
             with open(args.output, "w") as f:
@@ -68,38 +49,16 @@ def main() -> None:
             print(data)
 
     elif args.format == "csv":
-        import domain_audit.report as report
-        original_display = report.display
-        report.display = lambda r: None
-
-        result = audit(domain, only=only)
-
-        report.display = original_display
-
+        result = audit(domain, only=only, show=False)
         if args.output:
             result.to_csv(args.output)
             print(f"CSV output written to {args.output}")
         else:
-            import csv
-            import io
-            buf = io.StringIO()
-            writer = csv.writer(buf)
-            writer.writerow(["module", "grade", "status", "finding", "detail", "fix"])
-            for name, r in result.results.items():
-                for finding in r.findings:
-                    writer.writerow([
-                        name,
-                        finding.get("grade", "-"),
-                        r.status,
-                        finding.get("label", ""),
-                        finding.get("detail", ""),
-                        finding.get("fix", ""),
-                    ])
-            print(buf.getvalue())
+            print(result.to_csv_string())
 
     else:
-        # Table format — auto-display handles it
-        result = audit(domain, only=only)
+        # Table format — auto-display via show=True
+        audit(domain, only=only, show=True)
 
 
 if __name__ == "__main__":

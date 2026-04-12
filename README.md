@@ -88,12 +88,12 @@ results.to_csv("audit.csv")
 | Module | What It Scans | Grade |
 |--------|--------------|-------|
 | **SSL/TLS** | Certificate validity, expiration, hostname match, protocol version (flags TLS 1.0/1.1) | A-F |
-| **DNS Records** | A, AAAA, MX, NS, TXT, CNAME, SOA, SRV | A-F |
-| **Subdomains** | Discovery via Certificate Transparency logs (crt.sh) | Informational |
-| **HTTP Headers** | HSTS, CSP, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy | A-F |
+| **DNS Records** | A, AAAA, MX, NS, TXT, CNAME, SOA, SRV, CAA + zone transfer (AXFR) test | A-F |
+| **Subdomains** | Discovery via CT logs + per-subdomain DNS, SSL, HTTP probes with data tables | Informational |
+| **HTTP Headers** | HSTS, CSP, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy + redirect chain analysis + cookie security flags | A-F |
 | **WHOIS** | Registrar info, domain creation & expiration dates, name servers | A-F |
-| **Email Security** | SPF record & policy, DKIM (6 common selectors), DMARC record & enforcement level | A-F |
-| **Open Ports** | 21 (FTP), 22 (SSH), 25 (SMTP), 80 (HTTP), 443 (HTTPS), 3306 (MySQL), 3389 (RDP), 5432 (PostgreSQL), 8080, 8443 | A-F |
+| **Email Security** | SPF (parsed tags + chain lookup limit), DKIM (36 selectors), DMARC (parsed tags + policy tests) — MXToolbox-style tables | A-F |
+| **Open Ports** | 16 ports: FTP, SSH, SMTP, HTTP, HTTPS, MSSQL, MySQL, RDP, PostgreSQL, Elasticsearch (9200/9300), MongoDB (27017-27019), 8080, 8443 | A-F |
 | **Tech Stack** | Web server, CMS, frameworks via headers, meta tags, and URL patterns | Informational |
 
 ## Grading System
@@ -106,7 +106,7 @@ results.to_csv("audit.csv")
 | **F** | Failing | Expired SSL, open database port, no DMARC |
 | **?** | Could not check | Scanner errored after retries |
 
-**Overall grade** = weighted average across modules (SSL 25%, DNS 15%, Email 15%, Headers 15%, WHOIS 10%, Ports 10%, Tech 5%, Subdomains 5%).
+**Overall grade** = weighted average across scored modules (SSL 25%, DNS 15%, Email 15%, Headers 15%, WHOIS 10%, Ports 10%). Tech and Subdomains are informational.
 
 **Action items** are auto-generated for any check below grade A, sorted by severity:
 `CRITICAL > HIGH > MEDIUM > LOW`
@@ -116,22 +116,25 @@ results.to_csv("audit.csv")
 - **Parallel scanning** — all 8 modules run concurrently via thread pool
 - **Retry with backoff** — exponential backoff + jitter on transient network failures
 - **Per-scanner timeouts** — tuned defaults (3s-15s) so one slow scanner won't block the rest
+- **Per-subdomain probing** — discovered subdomains get DNS, SSL, HTTP scans with data-type-specific tables
+- **MXToolbox-style reports** — parsed record tables (Tag/Value/Name/Description) + validation test rows with pass/fail checkmarks
 - **Structured output** — JSON and CSV export for CI/CD pipelines and AI agents
-- **Colab-native** — rich color-coded HTML cards with expandable detail sections in Google Colab
+- **Colab-native** — rich color-coded HTML with summary table, expand/collapse, and detailed drill-down
+- **XSS-safe** — all user data HTML-escaped in Colab renderer
 - **Zero API keys** — everything works out of the box, no signup required
 - **AI-friendly** — `results.to_dict()` returns clean structured data any LLM can parse
 
 ## Available Scanners
 
 ```
-dns         DNS record enumeration (A, AAAA, MX, NS, TXT, CNAME, SOA, SRV)
-subdomains  Subdomain discovery via Certificate Transparency logs
-ssl         SSL/TLS certificate health, expiration, protocol check
-headers     HTTP security headers audit
-whois       WHOIS domain registration and expiry info
-ports       Common port scan (10 ports)
-email       Email security: SPF, DKIM, DMARC validation
-tech        Technology stack detection
+dns         DNS records (A, AAAA, MX, NS, TXT, CNAME, SOA, SRV, CAA) + zone transfer test
+subdomains  CT log discovery + per-subdomain DNS/SSL/HTTP probes with data tables
+ssl         SSL/TLS certificate health, expiration, hostname match, protocol check
+headers     Security headers + redirect chain analysis + cookie security flags
+whois       WHOIS registration, domain expiry, name servers
+ports       16-port scan (HTTP, HTTPS, SSH, SMTP, MSSQL, MySQL, RDP, PostgreSQL, Elasticsearch, MongoDB)
+email       SPF/DKIM/DMARC with parsed record tables, validation tests, SPF lookup chain counting
+tech        Server, CMS, framework fingerprinting via headers and HTML
 ```
 
 Run specific ones with `--only`:
