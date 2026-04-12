@@ -26,7 +26,7 @@ class TestSslScan:
 
     @patch("domain_audit.scanners.ssl_check._get_cert")
     def test_expiring_soon_grade_b(self, mock_get_cert):
-        mock_get_cert.return_value = _make_cert(days_left=60)
+        mock_get_cert.return_value = _make_cert(days_left=45)
         result = scan("example.com")
         assert result.grade == "B"
 

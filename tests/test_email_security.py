@@ -101,7 +101,8 @@ class TestCheckDKIM:
 class TestEmailScan:
     @patch("domain_audit.scanners.email_security._check_mx")
     @patch("domain_audit.scanners.email_security._resolve_txt")
-    def test_full_scan_structure(self, mock_resolve, mock_mx):
+    @patch("domain_audit.scanners.email_security._has_mx", return_value=True)
+    def test_full_scan_structure(self, mock_has_mx, mock_resolve, mock_mx):
         def resolver(name):
             if name.startswith("_dmarc."):
                 return ["v=DMARC1; p=reject; rua=mailto:a@b.com"]
@@ -135,8 +136,18 @@ class TestEmailScan:
             assert "record_type" in f
             assert "domain" in f
 
+    @patch("domain_audit.scanners.email_security._has_mx", return_value=False)
+    def test_no_mx_short_circuits(self, mock_has_mx):
+        """When domain has no MX records, skip SPF/DKIM/DMARC checks entirely."""
+        result = scan("no-email.example.com")
+        assert result.grade == "C"
+        assert result.status == "warn"
+        assert len(result.findings) == 1
+        assert "No MX records" in result.findings[0]["detail"]
+
+    @patch("domain_audit.scanners.email_security._has_mx", return_value=True)
     @patch("domain_audit.scanners.email_security._resolve_txt")
-    def test_no_records(self, mock_resolve):
+    def test_no_records(self, mock_resolve, mock_has_mx):
         mock_resolve.return_value = []
         result = scan("example.com")
         assert result.grade == "F"

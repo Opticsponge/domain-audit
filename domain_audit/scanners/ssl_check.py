@@ -49,7 +49,7 @@ def scan(domain: str) -> ScanResult:
         elif days_left < 30:
             exp_grade = "C"
             exp_detail = f"Certificate expires in {days_left} days — renew immediately"
-        elif days_left < 90:
+        elif days_left < 60:
             exp_grade = "B"
             exp_detail = f"Certificate expires in {days_left} days — plan renewal"
         else:

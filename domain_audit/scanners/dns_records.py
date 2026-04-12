@@ -109,7 +109,7 @@ def _check_port(ip: str, port: int) -> bool:
     sock.settimeout(2.0)
     try:
         return sock.connect_ex((ip, port)) == 0
-    except (socket.timeout, OSError):
+    except (TimeoutError, OSError):
         return False
     finally:
         sock.close()
@@ -241,14 +241,14 @@ def scan(domain: str) -> ScanResult:
                         }
                     )
             else:
-                grade = "A" if found else _missing_grade(rdtype)
+                grade = "A" if found else _missing_grade(rdtype, domain)
                 findings.append(
                     {
                         "label": f"{rdtype} records",
                         "value": records if found else "Not found",
                         "grade": grade,
                         "detail": f"{'Found' if found else 'Missing'} {rdtype} record{'s' if len(records) != 1 else ''}",
-                        "fix": _fix_suggestion(rdtype) if not found else "",
+                        "fix": _fix_suggestion(rdtype, domain) if not found else "",
                     }
                 )
         except Exception as exc:
@@ -386,15 +386,25 @@ def scan(domain: str) -> ScanResult:
     )
 
 
-def _missing_grade(rdtype: str) -> str:
+def _is_subdomain(domain: str) -> bool:
+    """Heuristic: a domain with 3+ labels is likely a subdomain (e.g. demo.example.com)."""
+    return len(domain.rstrip(".").split(".")) > 2
+
+
+def _missing_grade(rdtype: str, domain: str = "") -> str:
     if rdtype in CRITICAL_TYPES:
+        # Subdomains normally inherit NS from the parent zone — missing NS is expected
+        if rdtype == "NS" and _is_subdomain(domain):
+            return "A"
         return "F"
     if rdtype in IMPORTANT_TYPES:
         return "C"
     return "A"
 
 
-def _fix_suggestion(rdtype: str) -> str:
+def _fix_suggestion(rdtype: str, domain: str = "") -> str:
+    if rdtype == "NS" and _is_subdomain(domain):
+        return ""  # Subdomains inherit NS from parent zone — not an issue
     suggestions = {
         "A": "Add an A record pointing to your server's IPv4 address",
         "AAAA": "Consider adding an AAAA record for IPv6 support",

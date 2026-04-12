@@ -863,10 +863,39 @@ def _check_mx(domain: str) -> dict[str, Any]:
 # ═══════════════════════════════════════════════════════════════════
 
 
+def _has_mx(domain: str) -> bool:
+    """Return True if the domain has at least one MX record."""
+    try:
+        answers = dns.resolver.resolve(domain, "MX", lifetime=5.0)
+        return any(True for _ in answers)
+    except Exception:
+        return False
+
+
 def scan(domain: str) -> ScanResult:
     start = time.time()
     findings = []
     raw_data: dict[str, Any] = {}
+
+    # ── Pre-check: does the domain receive email at all? ──
+    if not _has_mx(domain):
+        return ScanResult(
+            module="email",
+            status="warn",
+            grade="C",
+            findings=[
+                {
+                    "label": "MX Records",
+                    "value": "Not found",
+                    "grade": "C",
+                    "detail": f"No MX records found for {domain} — domain does not appear to receive email",
+                    "fix": "Add MX records if this domain should receive email, or ignore if email is not used",
+                }
+            ],
+            raw_data={"mx_exists": False},
+            elapsed=time.time() - start,
+            retries=0,
+        )
 
     # ── SPF ──
     spf = _check_spf(domain)
