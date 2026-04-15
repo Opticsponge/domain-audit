@@ -97,7 +97,6 @@ class AuditResult:
 # ═══════════════════════════════════════════════════════════════════
 
 
-
 def _make_progress_terminal(domain: str, scanner_names: list[str]) -> Callable[[str, ScanResult | None], None]:
     """Return a callback that prints scanner progress to the terminal."""
     from rich.console import Console

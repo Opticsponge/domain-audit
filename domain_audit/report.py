@@ -343,4 +343,3 @@ def _display_terminal_detailed_findings(console, findings: list, domain: str, mo
             console.print(f"     [cyan]Fix:[/cyan] {fix}")
 
         console.print()
-
