@@ -769,7 +769,7 @@ def _find_finding(scan_result, label_contains: str) -> str:
     for f in scan_result.findings:
         if label_contains.lower() in f.get("label", "").lower():
             val = f.get("value", "-")
-            return str(val) if not isinstance(val, (dict, list)) else "-"
+            return str(val) if not isinstance(val, dict | list) else "-"
     return "-"
 
 
