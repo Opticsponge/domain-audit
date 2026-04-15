@@ -64,7 +64,7 @@ def scan(domain: str) -> ScanResult:
         elif short_lived:
             exp_grade = "A"
             exp_detail = (
-                f"Short-lived certificate ({total_validity}d validity), " f"{days_left} days remaining — auto-rotated"
+                f"Short-lived certificate ({total_validity}d validity), {days_left} days remaining — auto-rotated"
             )
         elif days_left < 60:
             exp_grade = "B"
