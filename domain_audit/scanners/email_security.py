@@ -616,7 +616,7 @@ def _check_dkim(domain: str) -> dict[str, Any]:
                 {
                     "test": "DKIM Record Published",
                     "pass": False,
-                    "result": f"No DKIM record found (checked {len(DKIM_SELECTORS)} common selectors)",
+                    "result": f"No DKIM record found (checked {len(DKIM_SELECTORS)} common selectors — may use a custom selector)",
                 }
             )
             result["grade"] = "C"
@@ -953,7 +953,7 @@ def scan(domain: str) -> ScanResult:
     if dkim["grade"] == "?":
         dkim_fix = "DNS lookups failed — retry scan to verify DKIM"
     elif dkim["grade"] != "A":
-        dkim_fix = "Configure DKIM signing with your email provider"
+        dkim_fix = "Verify DKIM is configured — if using a custom selector not in our list, this check may not detect it"
     else:
         dkim_fix = ""
 

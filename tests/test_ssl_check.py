@@ -25,16 +25,22 @@ class TestSslScan:
         assert result.grade == "A"
 
     @patch("domain_audit.scanners.ssl_check._get_cert")
-    def test_expiring_soon_grade_b(self, mock_get_cert):
-        mock_get_cert.return_value = _make_cert(days_left=45)
+    def test_within_renewal_window_grade_b(self, mock_get_cert):
+        mock_get_cert.return_value = _make_cert(days_left=60)
         result = scan("example.com")
         assert result.grade == "B"
 
     @patch("domain_audit.scanners.ssl_check._get_cert")
-    def test_expiring_very_soon_grade_c(self, mock_get_cert):
-        mock_get_cert.return_value = _make_cert(days_left=15)
+    def test_expiring_soon_grade_c(self, mock_get_cert):
+        mock_get_cert.return_value = _make_cert(days_left=20)
         result = scan("example.com")
         assert result.grade == "C"
+
+    @patch("domain_audit.scanners.ssl_check._get_cert")
+    def test_imminent_expiry_grade_f(self, mock_get_cert):
+        mock_get_cert.return_value = _make_cert(days_left=10)
+        result = scan("example.com")
+        assert result.grade == "F"
 
     @patch("domain_audit.scanners.ssl_check._get_cert")
     def test_expired_grade_f(self, mock_get_cert):

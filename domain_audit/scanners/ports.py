@@ -12,8 +12,11 @@ from domain_audit.validators import PrivateIPError, validate_resolved_ip
 COMMON_PORTS = {
     21: "FTP",
     22: "SSH",
+    23: "Telnet",
     25: "SMTP",
     80: "HTTP",
+    110: "POP3",
+    143: "IMAP",
     443: "HTTPS",
     1433: "MSSQL",
     3306: "MySQL",
@@ -29,8 +32,9 @@ COMMON_PORTS = {
 }
 
 EXPECTED_PORTS = {80, 443}
-ACCEPTABLE_PORTS = {22, 25, 8080, 8443}
-DANGEROUS_PORTS = {1433, 3306, 3389, 5432, 9200, 9300, 27017, 27018, 27019}
+ACCEPTABLE_PORTS = {22, 8080, 8443}
+WARNING_PORTS = {25}
+DANGEROUS_PORTS = {21, 23, 110, 143, 1433, 3306, 3389, 5432, 9200, 9300, 27017, 27018, 27019}
 
 PORT_TIMEOUT = 3.0
 
@@ -94,11 +98,12 @@ def _scan_host(host: str) -> dict[str, Any] | None:
 
 
 def _grade_ports(open_port_numbers: set[int]) -> str:
-    dangerous_open = open_port_numbers & DANGEROUS_PORTS
-    if dangerous_open:
+    if open_port_numbers & DANGEROUS_PORTS:
         return "F"
-    unexpected_open = open_port_numbers - EXPECTED_PORTS - ACCEPTABLE_PORTS - DANGEROUS_PORTS
-    if unexpected_open:
+    if open_port_numbers & WARNING_PORTS:
+        return "C"
+    unexpected = open_port_numbers - EXPECTED_PORTS - ACCEPTABLE_PORTS - DANGEROUS_PORTS - WARNING_PORTS
+    if unexpected:
         return "C"
     if open_port_numbers <= EXPECTED_PORTS:
         return "A"
@@ -184,12 +189,25 @@ def scan(domain: str, subdomains: list[str] | None = None) -> ScanResult:
                     "label": f"Dangerous ports — {host_label}",
                     "value": list(dangerous_open),
                     "grade": "F",
-                    "detail": f"Database/RDP ports open: {port_names}",
+                    "detail": f"Dangerous service ports open: {port_names}",
                     "fix": "Close these ports or restrict access via firewall rules",
                 }
             )
 
-        unexpected = port_nums - EXPECTED_PORTS - ACCEPTABLE_PORTS - DANGEROUS_PORTS
+        warning_open = port_nums & WARNING_PORTS
+        if warning_open:
+            port_names = ", ".join(f"{p} ({COMMON_PORTS[p]})" for p in sorted(warning_open))
+            findings.append(
+                {
+                    "label": f"Warning ports — {host_label}",
+                    "value": list(warning_open),
+                    "grade": "C",
+                    "detail": f"SMTP port open — verify this is an intended mail server, not an open relay",
+                    "fix": "Close port 25 if this host is not a mail server, or restrict relay access",
+                }
+            )
+
+        unexpected = port_nums - EXPECTED_PORTS - ACCEPTABLE_PORTS - DANGEROUS_PORTS - WARNING_PORTS
         if unexpected:
             port_names = ", ".join(f"{p} ({COMMON_PORTS.get(p, 'unknown')})" for p in sorted(unexpected))
             findings.append(

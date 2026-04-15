@@ -5,22 +5,12 @@ from typing import Any
 
 import requests
 
-from domain_audit.grader import ScanResult
+from domain_audit.grader import ScanResult, worst_grade
 from domain_audit.rate_limit import throttle
 from domain_audit.retry import RetryConfig, with_retry
 from domain_audit.validators import safe_error
 
 SECURITY_HEADERS = {
-    "Strict-Transport-Security": {
-        "label": "HSTS (Strict-Transport-Security)",
-        "severity": "HIGH",
-        "fix": "Add header: Strict-Transport-Security: max-age=31536000; includeSubDomains",
-    },
-    "Content-Security-Policy": {
-        "label": "Content-Security-Policy",
-        "severity": "HIGH",
-        "fix": "Add a Content-Security-Policy header to prevent XSS and data injection",
-    },
     "X-Content-Type-Options": {
         "label": "X-Content-Type-Options",
         "severity": "MEDIUM",
@@ -42,6 +32,139 @@ SECURITY_HEADERS = {
         "fix": "Add a Permissions-Policy header to control browser feature access",
     },
 }
+
+# Minimum max-age (in seconds) considered strong: 1 year
+_HSTS_STRONG_MAX_AGE = 31536000
+# 6 months — acceptable but not ideal
+_HSTS_ACCEPTABLE_MAX_AGE = 15768000
+
+
+def _grade_hsts(headers_lower: dict[str, str]) -> dict[str, Any]:
+    """Grade HSTS header quality, not just presence."""
+    value = headers_lower.get("strict-transport-security")
+    if not value:
+        return {
+            "label": "HSTS (Strict-Transport-Security)",
+            "value": "Not set",
+            "grade": "F",
+            "detail": "HSTS header is missing — browsers won't enforce HTTPS",
+            "fix": "Add header: Strict-Transport-Security: max-age=31536000; includeSubDomains",
+        }
+
+    directives = [d.strip().lower() for d in value.split(";")]
+    max_age = 0
+    for d in directives:
+        if d.startswith("max-age"):
+            try:
+                max_age = int(d.split("=", 1)[1].strip())
+            except (IndexError, ValueError):
+                pass
+
+    has_subdomains = any(d == "includesubdomains" for d in directives)
+    has_preload = any(d == "preload" for d in directives)
+
+    if max_age <= 0:
+        return {
+            "label": "HSTS (Strict-Transport-Security)",
+            "value": value,
+            "grade": "F",
+            "detail": "HSTS max-age is 0 or invalid — effectively disabled",
+            "fix": "Set max-age to at least 31536000 (1 year)",
+        }
+
+    if max_age >= _HSTS_STRONG_MAX_AGE and has_subdomains:
+        detail = f"HSTS max-age={max_age}, includeSubDomains"
+        if has_preload:
+            detail += ", preload"
+        return {
+            "label": "HSTS (Strict-Transport-Security)",
+            "value": value,
+            "grade": "A",
+            "detail": detail,
+            "fix": "",
+        }
+
+    if max_age >= _HSTS_STRONG_MAX_AGE:
+        return {
+            "label": "HSTS (Strict-Transport-Security)",
+            "value": value,
+            "grade": "B",
+            "detail": f"HSTS max-age={max_age} but missing includeSubDomains",
+            "fix": "Add includeSubDomains to protect all subdomains",
+        }
+
+    fix_parts = [f"Increase max-age to {_HSTS_STRONG_MAX_AGE}"]
+    if not has_subdomains:
+        fix_parts.append("add includeSubDomains")
+
+    return {
+        "label": "HSTS (Strict-Transport-Security)",
+        "value": value,
+        "grade": "C" if max_age < _HSTS_ACCEPTABLE_MAX_AGE else "B",
+        "detail": f"HSTS max-age={max_age} is below recommended 1-year minimum",
+        "fix": "; ".join(fix_parts),
+    }
+
+
+def _grade_csp(headers_lower: dict[str, str]) -> dict[str, Any]:
+    """Grade CSP quality: enforcing > report-only > absent."""
+    enforcing = headers_lower.get("content-security-policy")
+    report_only = headers_lower.get("content-security-policy-report-only")
+
+    if enforcing:
+        policy_lower = enforcing.lower()
+        has_unsafe_inline = "'unsafe-inline'" in policy_lower
+        has_unsafe_eval = "'unsafe-eval'" in policy_lower
+        has_wildcard = "default-src *" in policy_lower or "default-src: *" in policy_lower
+
+        if has_wildcard:
+            return {
+                "label": "Content-Security-Policy",
+                "value": enforcing,
+                "grade": "C",
+                "detail": "CSP uses wildcard default-src — provides no meaningful protection",
+                "fix": "Replace default-src * with a restrictive policy",
+            }
+
+        issues = []
+        if has_unsafe_inline:
+            issues.append("unsafe-inline")
+        if has_unsafe_eval:
+            issues.append("unsafe-eval")
+
+        if issues:
+            return {
+                "label": "Content-Security-Policy",
+                "value": enforcing,
+                "grade": "B",
+                "detail": f"CSP is enforcing but uses {', '.join(issues)}",
+                "fix": f"Remove {', '.join(issues)} from CSP — use nonces or hashes instead",
+            }
+
+        return {
+            "label": "Content-Security-Policy",
+            "value": enforcing,
+            "grade": "A",
+            "detail": "CSP is enforcing with no unsafe directives",
+            "fix": "",
+        }
+
+    if report_only:
+        return {
+            "label": "Content-Security-Policy",
+            "value": f"(Report-Only) {report_only}",
+            "grade": "B",
+            "detail": "CSP is in report-only mode — violations logged but not blocked",
+            "fix": "Promote Content-Security-Policy-Report-Only to enforcing Content-Security-Policy",
+        }
+
+    return {
+        "label": "Content-Security-Policy",
+        "value": "Not set",
+        "grade": "C",
+        "detail": "No Content-Security-Policy header — vulnerable to XSS and injection",
+        "fix": "Add a Content-Security-Policy header to prevent XSS and data injection",
+    }
 
 _retry = RetryConfig(max_retries=2, timeout_per_attempt=10.0)
 
@@ -228,22 +351,28 @@ def scan(domain: str) -> ScanResult:
     try:
         response_headers = _fetch_headers(domain)
         raw_data["headers"] = response_headers
-        present_count = 0
 
         # Build lowercase lookup once
         headers_lower = {k.lower(): v for k, v in response_headers.items()}
 
-        # ── Security headers check ──
+        # ── HSTS (quality-graded) ──
+        hsts_finding = _grade_hsts(headers_lower)
+        findings.append(hsts_finding)
+
+        # ── CSP (quality-graded) ──
+        csp_finding = _grade_csp(headers_lower)
+        findings.append(csp_finding)
+
+        # ── Other security headers (presence check) ──
         for header_name, meta in SECURITY_HEADERS.items():
             found = header_name.lower() in headers_lower
             header_value = headers_lower.get(header_name.lower())
 
             if found:
-                present_count += 1
                 grade = "A"
                 detail = f"{meta['label']} is set"
             else:
-                grade = "C" if meta["severity"] in ("HIGH",) else "B"
+                grade = "B"
                 detail = f"{meta['label']} is missing"
 
             findings.append(
@@ -261,7 +390,8 @@ def scan(domain: str) -> ScanResult:
         raw_data["redirect_chain"] = redirect
 
         if redirect["issues"]:
-            redirect_grade = "C"
+            has_downgrade = any("downgrade" in i.lower() for i in redirect["issues"])
+            redirect_grade = "F" if has_downgrade else "C"
             redirect_detail = "; ".join(redirect["issues"])
         else:
             redirect_grade = "A"
@@ -391,22 +521,9 @@ def scan(domain: str) -> ScanResult:
                 }
             )
 
-        # ── Calculate module grade ──
-        total = len(SECURITY_HEADERS)
-        if present_count == total:
-            module_grade = "A"
-        elif present_count >= total - 1:
-            module_grade = "B"
-        elif present_count >= total // 2:
-            module_grade = "C"
-        else:
-            module_grade = "F"
-
-        # Downgrade if redirect or cookie issues
-        grade_order = {"A": 3, "B": 2, "C": 1, "F": 0}
-        for extra_grade in (redirect_grade, cookie_grade if cookie_check["cookies"] else "A"):
-            if extra_grade in grade_order and grade_order.get(extra_grade, 3) < grade_order.get(module_grade, 0):
-                module_grade = extra_grade
+        # ── Calculate module grade from all finding grades ──
+        all_grades = [str(f["grade"]) for f in findings if f["grade"] not in ("?", "-")]
+        module_grade = worst_grade(all_grades) if all_grades else "?"
 
         status = "pass" if module_grade == "A" else "warn" if module_grade in ("B", "C") else "fail"
 
