@@ -51,15 +51,11 @@ class TestHstsGrading:
         assert result["grade"] == "F"
 
     def test_strong_with_subdomains(self):
-        result = _grade_hsts(
-            {"strict-transport-security": "max-age=31536000; includeSubDomains"}
-        )
+        result = _grade_hsts({"strict-transport-security": "max-age=31536000; includeSubDomains"})
         assert result["grade"] == "A"
 
     def test_strong_with_preload(self):
-        result = _grade_hsts(
-            {"strict-transport-security": "max-age=31536000; includeSubDomains; preload"}
-        )
+        result = _grade_hsts({"strict-transport-security": "max-age=31536000; includeSubDomains; preload"})
         assert result["grade"] == "A"
 
     def test_strong_without_subdomains(self):
@@ -85,16 +81,12 @@ class TestCspGrading:
         assert result["grade"] == "A"
 
     def test_enforcing_with_unsafe_inline(self):
-        result = _grade_csp(
-            {"content-security-policy": "default-src 'self' 'unsafe-inline'"}
-        )
+        result = _grade_csp({"content-security-policy": "default-src 'self' 'unsafe-inline'"})
         assert result["grade"] == "B"
 
     def test_enforcing_with_unsafe_eval(self):
         # CSP policy string containing the unsafe-eval directive (not actual code eval)
-        result = _grade_csp(
-            {"content-security-policy": "script-src 'unsafe-eval'"}
-        )
+        result = _grade_csp({"content-security-policy": "script-src 'unsafe-eval'"})
         assert result["grade"] == "B"
 
     def test_enforcing_wildcard(self):
@@ -102,9 +94,7 @@ class TestCspGrading:
         assert result["grade"] == "C"
 
     def test_report_only(self):
-        result = _grade_csp(
-            {"content-security-policy-report-only": "default-src 'self'"}
-        )
+        result = _grade_csp({"content-security-policy-report-only": "default-src 'self'"})
         assert result["grade"] == "B"
 
     def test_enforcing_takes_precedence_over_report_only(self):

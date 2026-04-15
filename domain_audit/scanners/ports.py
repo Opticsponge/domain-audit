@@ -202,7 +202,7 @@ def scan(domain: str, subdomains: list[str] | None = None) -> ScanResult:
                     "label": f"Warning ports — {host_label}",
                     "value": list(warning_open),
                     "grade": "C",
-                    "detail": f"SMTP port open — verify this is an intended mail server, not an open relay",
+                    "detail": "SMTP port open — verify this is an intended mail server, not an open relay",
                     "fix": "Close port 25 if this host is not a mail server, or restrict relay access",
                 }
             )

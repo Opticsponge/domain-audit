@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import time
 from typing import Any
 
@@ -55,10 +56,8 @@ def _grade_hsts(headers_lower: dict[str, str]) -> dict[str, Any]:
     max_age = 0
     for d in directives:
         if d.startswith("max-age"):
-            try:
+            with contextlib.suppress(IndexError, ValueError):
                 max_age = int(d.split("=", 1)[1].strip())
-            except (IndexError, ValueError):
-                pass
 
     has_subdomains = any(d == "includesubdomains" for d in directives)
     has_preload = any(d == "preload" for d in directives)
@@ -165,6 +164,7 @@ def _grade_csp(headers_lower: dict[str, str]) -> dict[str, Any]:
         "detail": "No Content-Security-Policy header — vulnerable to XSS and injection",
         "fix": "Add a Content-Security-Policy header to prevent XSS and data injection",
     }
+
 
 _retry = RetryConfig(max_retries=2, timeout_per_attempt=10.0)
 
