@@ -953,7 +953,9 @@ def scan(domain: str) -> ScanResult:
     if dkim["grade"] == "?":
         dkim_fix = "DNS lookups failed — retry scan to verify DKIM"
     elif dkim["grade"] != "A":
-        dkim_fix = "Verify DKIM is configured — if using a custom selector not in our list, this check may not detect it"
+        dkim_fix = (
+            "Verify DKIM is configured — if using a custom selector not in our list, this check may not detect it"
+        )
     else:
         dkim_fix = ""
 
