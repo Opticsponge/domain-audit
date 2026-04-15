@@ -170,6 +170,7 @@ def _probe_ssl(sub: str) -> dict[str, Any]:
         "issuer": None,
         "expires": None,
         "days_left": None,
+        "total_validity_days": None,
         "protocol": None,
         "valid": None,
         "error": None,
@@ -188,10 +189,17 @@ def _probe_ssl(sub: str) -> dict[str, Any]:
             protocol = sock.version()
 
         not_after = cert.get("notAfter", "")
+        not_before = cert.get("notBefore", "")
         expiry_ts = ssl.cert_time_to_seconds(not_after)
         expiry_dt = datetime.fromtimestamp(expiry_ts, tz=timezone.utc)
         now = datetime.now(tz=timezone.utc)
         days_left = (expiry_dt - now).days
+
+        total_validity_days = None
+        if not_before:
+            issued_ts = ssl.cert_time_to_seconds(not_before)
+            issued_dt = datetime.fromtimestamp(issued_ts, tz=timezone.utc)
+            total_validity_days = (expiry_dt - issued_dt).days
 
         issuer = dict(x[0] for x in cert.get("issuer", []))
 
@@ -199,6 +207,7 @@ def _probe_ssl(sub: str) -> dict[str, Any]:
         data["issuer"] = issuer.get("organizationName", "Unknown")
         data["expires"] = not_after
         data["days_left"] = days_left
+        data["total_validity_days"] = total_validity_days
         data["protocol"] = protocol
         data["valid"] = True
     except ssl.SSLCertVerificationError as e:
@@ -290,18 +299,21 @@ def _build_ssl_table(probes: list[dict]) -> list[dict[str, str]]:
         ips = p["dns"].get("a", [])
 
         if s["has_ssl"]:
+            dl = s["days_left"] or 0
+            tv = s["total_validity_days"]
+            short_lived = tv is not None and tv <= 90
             grade = (
                 "F"
                 if not s["valid"]
-                else (
-                    "A"
-                    if (s["days_left"] or 0) > 90
-                    else "B"
-                    if (s["days_left"] or 0) > 30
-                    else "C"
-                    if (s["days_left"] or 0) > 0
-                    else "F"
-                )
+                else "F"
+                if dl < 15
+                else "C"
+                if dl < 30
+                else "A"
+                if short_lived
+                else "B"
+                if dl < 60
+                else "A"
             )
             rows.append(
                 {

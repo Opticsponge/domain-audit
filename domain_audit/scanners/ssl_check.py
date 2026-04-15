@@ -38,10 +38,19 @@ def scan(domain: str) -> ScanResult:
 
         # Expiration check
         not_after = cert.get("notAfter", "")
+        not_before = cert.get("notBefore", "")
         expiry_dt = ssl.cert_time_to_seconds(not_after)
         expiry_date = datetime.fromtimestamp(expiry_dt, tz=timezone.utc)
         now = datetime.now(tz=timezone.utc)
         days_left = (expiry_date - now).days
+
+        # Detect short-lived certificates (total validity <= 90 days)
+        short_lived = False
+        if not_before:
+            issued_dt = ssl.cert_time_to_seconds(not_before)
+            issued_date = datetime.fromtimestamp(issued_dt, tz=timezone.utc)
+            total_validity = (expiry_date - issued_date).days
+            short_lived = total_validity <= 90
 
         if days_left < 0:
             exp_grade = "F"
@@ -52,7 +61,13 @@ def scan(domain: str) -> ScanResult:
         elif days_left < 30:
             exp_grade = "C"
             exp_detail = f"Certificate expires in {days_left} days — renew immediately"
-        elif days_left < 90:
+        elif short_lived:
+            exp_grade = "A"
+            exp_detail = (
+                f"Short-lived certificate ({total_validity}d validity), "
+                f"{days_left} days remaining — auto-rotated"
+            )
+        elif days_left < 60:
             exp_grade = "B"
             exp_detail = f"Certificate expires in {days_left} days — schedule renewal"
         else:
@@ -65,7 +80,7 @@ def scan(domain: str) -> ScanResult:
                 "value": {"expires": not_after, "days_left": days_left},
                 "grade": exp_grade,
                 "detail": exp_detail,
-                "fix": "Renew your SSL certificate" if exp_grade != "A" else "",
+                "fix": "" if exp_grade == "A" else "Renew your SSL certificate",
             }
         )
 
