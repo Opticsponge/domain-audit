@@ -13,6 +13,7 @@ import dns.zone
 from domain_audit.grader import ScanResult, worst_grade
 from domain_audit.rate_limit import throttle
 from domain_audit.retry import RetryConfig, with_retry
+from domain_audit.scanners.ports import COMMON_PORTS, DANGEROUS_PORTS
 from domain_audit.validators import is_private_ip, safe_error
 
 RECORD_TYPES = ["A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA", "SRV", "CAA"]
@@ -89,9 +90,6 @@ def _parse_caa(records: list[str]) -> list[dict[str, str]]:
                 }
             )
     return parsed
-
-
-from domain_audit.scanners.ports import COMMON_PORTS, DANGEROUS_PORTS
 
 
 def _check_port(ip: str, port: int) -> bool:

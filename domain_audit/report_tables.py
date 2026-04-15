@@ -5,7 +5,7 @@ from __future__ import annotations
 import html as html_mod
 from typing import TYPE_CHECKING
 
-from domain_audit.scanners.ports import _grade_ports
+from domain_audit.scanners.ports import DANGEROUS_PORTS, _grade_ports
 
 if TYPE_CHECKING:
     from domain_audit.core import AuditResult
@@ -13,7 +13,6 @@ if TYPE_CHECKING:
 
 def _esc(text: str) -> str:
     return html_mod.escape(str(text)) if text else ""
-
 
 
 def _port_status_text(open_count: int, closed: int, filtered: int) -> str:
