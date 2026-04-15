@@ -10,7 +10,7 @@ from typing import Any
 
 import dns.exception
 import dns.resolver
-import requests
+import httpx
 
 from domain_audit.grader import ScanResult
 from domain_audit.rate_limit import throttle
@@ -27,10 +27,11 @@ MAX_SUBDOMAIN_SCAN = 25
 def _query_crtsh(domain: str) -> list[dict[str, Any]]:
     """Query crt.sh Certificate Transparency logs."""
     throttle("https://crt.sh/")
-    resp = requests.get(
+    resp = httpx.get(
         "https://crt.sh/",
         params={"q": f"%.{domain}", "output": "json"},
         timeout=15.0,
+        follow_redirects=True,
         headers={"User-Agent": "domain-audit/0.1"},
     )
     resp.raise_for_status()
@@ -40,10 +41,11 @@ def _query_crtsh(domain: str) -> list[dict[str, Any]]:
 def _query_certspotter(domain: str) -> list[dict[str, Any]]:
     """Fallback: query SSLMate's Cert Spotter API."""
     throttle("https://api.certspotter.com/")
-    resp = requests.get(
+    resp = httpx.get(
         "https://api.certspotter.com/v1/issuances",
         params={"domain": domain, "include_subdomains": "true", "expand": "dns_names"},
         timeout=15.0,
+        follow_redirects=True,
         headers={"User-Agent": "domain-audit/0.1"},
     )
     resp.raise_for_status()
@@ -232,19 +234,20 @@ def _probe_http(sub: str) -> dict[str, Any]:
     for scheme in ("https", "http"):
         try:
             throttle(f"{scheme}://{sub}")
-            resp = requests.get(
+            resp = httpx.get(
                 f"{scheme}://{sub}",
                 timeout=5.0,
-                allow_redirects=True,
+                follow_redirects=True,
                 headers={"User-Agent": "domain-audit/0.1"},
             )
             data["reachable"] = True
             data["status_code"] = resp.status_code
             data["server"] = resp.headers.get("Server", None)
-            data["https"] = scheme == "https" or resp.url.startswith("https://")
+            final_url = str(resp.url)
+            data["https"] = scheme == "https" or final_url.startswith("https://")
             data["response_ms"] = round(resp.elapsed.total_seconds() * 1000)
-            if resp.url != f"{scheme}://{sub}" and resp.url != f"{scheme}://{sub}/":
-                data["redirect"] = resp.url
+            if final_url != f"{scheme}://{sub}" and final_url != f"{scheme}://{sub}/":
+                data["redirect"] = final_url
             break
         except Exception:
             continue

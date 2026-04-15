@@ -4,7 +4,7 @@ import contextlib
 import time
 from typing import Any
 
-import requests
+import httpx
 
 from domain_audit.grader import ScanResult, worst_grade
 from domain_audit.rate_limit import throttle
@@ -172,10 +172,10 @@ _retry = RetryConfig(max_retries=2, timeout_per_attempt=10.0)
 @with_retry(config=_retry)
 def _fetch_headers(domain: str) -> dict[str, str]:
     throttle(f"https://{domain}")
-    resp = requests.get(
+    resp = httpx.get(
         f"https://{domain}",
         timeout=_retry.timeout_per_attempt,
-        allow_redirects=True,
+        follow_redirects=True,
         headers={"User-Agent": "domain-audit/0.1"},
     )
     return dict(resp.headers)
@@ -188,10 +188,10 @@ def _check_redirect_chain(domain: str) -> dict[str, Any]:
 
     try:
         throttle(f"http://{domain}")
-        resp = requests.get(
+        resp = httpx.get(
             f"http://{domain}",
             timeout=10.0,
-            allow_redirects=False,
+            follow_redirects=False,
             headers={"User-Agent": "domain-audit/0.1"},
         )
 
@@ -217,10 +217,10 @@ def _check_redirect_chain(domain: str) -> dict[str, Any]:
 
             try:
                 throttle(current_url)
-                resp = requests.get(
+                resp = httpx.get(
                     current_url,
                     timeout=10.0,
-                    allow_redirects=False,
+                    follow_redirects=False,
                     headers={"User-Agent": "domain-audit/0.1"},
                 )
                 location = resp.headers.get("Location", "")
@@ -280,25 +280,15 @@ def _check_cookies(domain: str) -> dict[str, Any]:
 
     try:
         throttle(f"https://{domain}")
-        resp = requests.get(
+        resp = httpx.get(
             f"https://{domain}",
             timeout=10.0,
-            allow_redirects=True,
+            follow_redirects=True,
             headers={"User-Agent": "domain-audit/0.1"},
         )
 
-        set_cookie_headers = []
-        # requests stores all Set-Cookie in response.headers as a single joined string
-        # Use raw headers from urllib3 for multiple Set-Cookie
-        if hasattr(resp.raw, "_original_response") and resp.raw._original_response:
-            raw_headers = resp.raw._original_response.headers.get_all("Set-Cookie") or []
-            set_cookie_headers = [h for h in raw_headers if h]
-
-        if not set_cookie_headers:
-            # Fallback
-            sc = resp.headers.get("Set-Cookie", "")
-            if sc:
-                set_cookie_headers = [sc]
+        # httpx natively supports multiple headers with the same name
+        set_cookie_headers = resp.headers.get_list("set-cookie")
 
         for cookie_str in set_cookie_headers:
             name = cookie_str.split("=", 1)[0].strip() if "=" in cookie_str else cookie_str.split(";")[0].strip()

@@ -5,11 +5,7 @@ from __future__ import annotations
 import html as html_mod
 from typing import TYPE_CHECKING
 
-from domain_audit.scanners.ports import (
-    ACCEPTABLE_PORTS,
-    DANGEROUS_PORTS,
-    EXPECTED_PORTS,
-)
+from domain_audit.scanners.ports import _grade_ports
 
 if TYPE_CHECKING:
     from domain_audit.core import AuditResult
@@ -18,18 +14,6 @@ if TYPE_CHECKING:
 def _esc(text: str) -> str:
     return html_mod.escape(str(text)) if text else ""
 
-
-def _grade_host_ports(open_port_numbers: set[int]) -> str:
-    """Grade a single host's open ports (mirrors ports scanner logic)."""
-    if open_port_numbers & DANGEROUS_PORTS:
-        return "F"
-    if open_port_numbers - EXPECTED_PORTS - ACCEPTABLE_PORTS - DANGEROUS_PORTS:
-        return "C"
-    if open_port_numbers <= EXPECTED_PORTS:
-        return "A"
-    if open_port_numbers <= EXPECTED_PORTS | ACCEPTABLE_PORTS:
-        return "B"
-    return "A"
 
 
 def _port_status_text(open_count: int, closed: int, filtered: int) -> str:
@@ -561,7 +545,7 @@ def _build_ports_rows(result: AuditResult) -> list[dict]:
             filtered = hr.get("filtered_count", 0)
             closed = hr.get("closed_count", 0)
             dangerous = [p for p in open_ports if p["port"] in DANGEROUS_PORTS]
-            grade = _grade_host_ports({p["port"] for p in open_ports})
+            grade = _grade_ports({p["port"] for p in open_ports})
             status = _port_status_text(len(open_ports), closed, filtered)
             rows.append(
                 {

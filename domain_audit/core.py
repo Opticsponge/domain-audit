@@ -6,6 +6,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
+from domain_audit.colab import is_colab, make_progress_colab
 from domain_audit.grader import ScanResult, compute_overall_grade, generate_action_items
 from domain_audit.scanners import SCANNERS
 from domain_audit.validators import safe_error
@@ -96,97 +97,6 @@ class AuditResult:
 # ═══════════════════════════════════════════════════════════════════
 
 
-def _is_colab() -> bool:
-    try:
-        from google.colab import output  # noqa: F401
-
-        return True
-    except ImportError:
-        return False
-
-
-def _make_progress_colab(domain: str, scanner_names: list[str]) -> Callable[[str, ScanResult | None], None]:
-    """Return a callback that updates a live HTML widget in Colab."""
-    import html as html_mod
-
-    from IPython.display import HTML
-    from IPython.display import display as ipy_display
-
-    state: dict[str, str] = {name: "pending" for name in scanner_names}
-    results_map: dict[str, ScanResult] = {}
-
-    # Create an output handle we can update
-    import IPython.display
-
-    handle = ipy_display(HTML(""), display_id=True)
-
-    def _render() -> str:
-        total = len(scanner_names)
-        done = sum(1 for v in state.values() if v != "pending" and v != "running")
-        pct = int(done / total * 100) if total else 0
-
-        rows = ""
-        for name in scanner_names:
-            label = html_mod.escape(_MODULE_LABELS.get(name, name))
-            s = state[name]
-            if s == "pending":
-                icon = "\u23f3"  # hourglass
-                status_text = '<span style="color:#6b7280">Waiting...</span>'
-                grade_badge = ""
-            elif s == "running":
-                icon = "\u26a1"  # lightning
-                status_text = '<span style="color:#3b82f6;font-weight:600">Scanning...</span>'
-                grade_badge = ""
-            else:
-                # Completed — get result details
-                r = results_map.get(name)
-                if r and r.status == "error":
-                    icon = "\u274c"
-                    status_text = f'<span style="color:#ef4444">Error ({r.elapsed:.1f}s)</span>'
-                    grade_badge = '<span style="background:#ef4444;color:white;padding:1px 8px;border-radius:4px;font-weight:700">?</span>'
-                elif r:
-                    grade = r.grade
-                    elapsed = r.elapsed
-                    colors = {"A": "#22c55e", "B": "#eab308", "C": "#f97316", "F": "#ef4444"}
-                    gc = colors.get(grade, "#6b7280")
-                    icon = _STATUS_ICON.get(r.status, "\u2705")
-                    status_text = f'<span style="color:{gc}">Done ({elapsed:.1f}s)</span>'
-                    grade_badge = f'<span style="background:{gc};color:white;padding:1px 8px;border-radius:4px;font-weight:700">{html_mod.escape(grade)}</span>'
-                else:
-                    icon = "\u2705"
-                    status_text = '<span style="color:#22c55e">Done</span>'
-                    grade_badge = ""
-
-            rows += f"""<tr>
-                <td style="padding:4px 12px">{icon}</td>
-                <td style="padding:4px 12px;font-weight:600">{label}</td>
-                <td style="padding:4px 12px">{status_text}</td>
-                <td style="padding:4px 12px;text-align:center">{grade_badge}</td>
-            </tr>"""
-
-        bar_color = "#22c55e" if pct == 100 else "#3b82f6"
-        return f"""<div style="font-family:system-ui,sans-serif;max-width:500px;margin:8px 0">
-            <div style="font-size:14px;font-weight:700;margin-bottom:8px">
-                Scanning {html_mod.escape(domain)}... {done}/{total} complete
-            </div>
-            <div style="background:#e5e7eb;border-radius:6px;height:8px;margin-bottom:12px;overflow:hidden">
-                <div style="background:{bar_color};height:100%;width:{pct}%;transition:width 0.3s ease;border-radius:6px"></div>
-            </div>
-            <table style="border-collapse:collapse;width:100%">{rows}</table>
-        </div>"""
-
-    def callback(name: str, result: ScanResult | None) -> None:
-        if result is None:
-            state[name] = "running"
-        else:
-            state[name] = "done"
-            results_map[name] = result
-        handle.update(IPython.display.HTML(_render()))
-
-    # Initial render
-    handle.update(IPython.display.HTML(_render()))
-    return callback
-
 
 def _make_progress_terminal(domain: str, scanner_names: list[str]) -> Callable[[str, ScanResult | None], None]:
     """Return a callback that prints scanner progress to the terminal."""
@@ -255,11 +165,11 @@ def audit(
 
     # Set up progress callback
     # Default: always show in Colab (even with show=False), follow `show` in terminal
-    show_progress = progress if progress is not None else (_is_colab() or show)
+    show_progress = progress if progress is not None else (is_colab() or show)
     progress_cb: Callable[[str, ScanResult | None], None] | None = None
     if show_progress:
-        if _is_colab():
-            progress_cb = _make_progress_colab(domain, scanner_names)
+        if is_colab():
+            progress_cb = make_progress_colab(domain, scanner_names, _MODULE_LABELS, _STATUS_ICON)
         else:
             progress_cb = _make_progress_terminal(domain, scanner_names)
 
@@ -352,7 +262,7 @@ def audit(
 
     # Show final summary line
     if show:
-        if _is_colab():
+        if is_colab():
             pass  # Colab progress widget already shows completion
         else:
             from rich.console import Console

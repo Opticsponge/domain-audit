@@ -22,12 +22,12 @@ def _whois_lookup(domain: str) -> Any:
 
 def _rdap_lookup(domain: str) -> dict[str, Any]:
     """Fallback: RDAP lookup over HTTPS. Works when WHOIS socket is blocked."""
-    import requests
+    import httpx
 
     # Step 1: Find the RDAP server for this TLD
     tld = domain.rsplit(".", 1)[-1]
     throttle("https://data.iana.org/rdap/dns.json")
-    bootstrap = requests.get("https://data.iana.org/rdap/dns.json", timeout=10.0).json()
+    bootstrap = httpx.get("https://data.iana.org/rdap/dns.json", timeout=10.0, follow_redirects=True).json()
     rdap_url = None
     for entry in bootstrap.get("services", []):
         tlds, urls = entry
@@ -41,7 +41,7 @@ def _rdap_lookup(domain: str) -> dict[str, Any]:
     # Step 2: Query RDAP (URL-encode domain to prevent path traversal)
     url = f"{rdap_url.rstrip('/')}/domain/{urllib.parse.quote(domain, safe='')}"
     throttle(url)
-    resp = requests.get(url, timeout=10.0, headers={"Accept": "application/rdap+json"})
+    resp = httpx.get(url, timeout=10.0, follow_redirects=True, headers={"Accept": "application/rdap+json"})
     resp.raise_for_status()
     data = resp.json()
 

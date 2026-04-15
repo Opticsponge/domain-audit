@@ -12,7 +12,7 @@ if sys.version_info >= (3, 11):
 else:
     from typing_extensions import NotRequired
 
-import requests
+import httpx
 
 from domain_audit.grader import ScanResult
 from domain_audit.rate_limit import throttle
@@ -317,10 +317,10 @@ def _merge_patterns(custom_patterns: dict | None) -> _EffectivePatterns:
 @with_retry(config=_retry)
 def _fetch_page(domain: str) -> tuple[dict[str, str], str]:
     throttle(f"https://{domain}")
-    resp = requests.get(
+    resp = httpx.get(
         f"https://{domain}",
         timeout=_retry.timeout_per_attempt,
-        allow_redirects=True,
+        follow_redirects=True,
         headers={"User-Agent": "domain-audit/0.1"},
     )
     return dict(resp.headers), resp.text[:100000]

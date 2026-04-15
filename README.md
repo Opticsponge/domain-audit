@@ -10,7 +10,7 @@
     <a href="https://colab.research.google.com/github/Opticsponge/domain-audit/blob/main/notebooks/domain_audit.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"></a>
     <a href="https://pypi.org/project/domain-audit/"><img src="https://img.shields.io/pypi/v/domain-audit?color=blue" alt="PyPI"></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-    <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.9+-blue.svg" alt="Python 3.9+"></a>
+    <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+"></a>
     <a href="https://github.com/Opticsponge/domain-audit/issues"><img src="https://img.shields.io/github/issues/Opticsponge/domain-audit" alt="GitHub Issues"></a>
     <a href="https://github.com/Opticsponge/domain-audit/stargazers"><img src="https://img.shields.io/github/stars/Opticsponge/domain-audit" alt="GitHub Stars"></a>
     <a href="https://github.com/Opticsponge/domain-audit/network/members"><img src="https://img.shields.io/github/forks/Opticsponge/domain-audit" alt="GitHub Forks"></a>

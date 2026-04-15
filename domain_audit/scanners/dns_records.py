@@ -91,14 +91,7 @@ def _parse_caa(records: list[str]) -> list[dict[str, str]]:
     return parsed
 
 
-DANGEROUS_PORTS = {
-    1433: "MSSQL",
-    3306: "MySQL",
-    3389: "RDP",
-    5432: "PostgreSQL",
-    9200: "Elasticsearch",
-    27017: "MongoDB",
-}
+from domain_audit.scanners.ports import COMMON_PORTS, DANGEROUS_PORTS
 
 
 def _check_port(ip: str, port: int) -> bool:
@@ -117,7 +110,7 @@ def _check_port(ip: str, port: int) -> bool:
 
 def _check_ips(ips: list[str]) -> list[dict[str, Any]]:
     """Get reverse DNS, geolocation, and dangerous port scan for each IP."""
-    import requests
+    import httpx
 
     results = []
     # Filter out private/reserved IPs before scanning
@@ -143,7 +136,7 @@ def _check_ips(ips: list[str]) -> list[dict[str, Any]]:
         # NOTE: Free tier is HTTP-only; data is non-security-critical (city/country/org)
         try:
             throttle(f"http://ip-api.com/json/{ip}")
-            resp = requests.get(
+            resp = httpx.get(
                 f"http://ip-api.com/json/{ip}",
                 params={"fields": "status,country,city,isp,org,as"},
                 timeout=5.0,
@@ -160,9 +153,9 @@ def _check_ips(ips: list[str]) -> list[dict[str, Any]]:
 
         # Quick scan of dangerous ports on this IP
         open_dangerous = []
-        for port, service in DANGEROUS_PORTS.items():
+        for port in sorted(DANGEROUS_PORTS):
             if _check_port(ip, port):
-                open_dangerous.append({"port": port, "service": service})
+                open_dangerous.append({"port": port, "service": COMMON_PORTS.get(port, "unknown")})
         info["open_dangerous_ports"] = open_dangerous
 
         results.append(info)
