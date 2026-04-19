@@ -1,7 +1,7 @@
 <p align="center">
   <h1 align="center">domain-audit</h1>
   <p align="center">
-    <strong>Comprehensive domain health auditing tool</strong>
+    <strong>Programmable Domain Intelligence for Agentic Workflows</strong>
   </p>
   <p align="center">
     DNS &bull; SSL/TLS &bull; Subdomains &bull; HTTP Headers &bull; WHOIS &bull; Ports &bull; Email Security &bull; Tech Detection
