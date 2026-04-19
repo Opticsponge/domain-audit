@@ -100,3 +100,84 @@ SSL 25%, DNS 15%, Email 15%, Headers 15%, WHOIS 10%, Ports 10%. Subdomains and T
   ]
 }
 ```
+
+## Integration: MCP
+
+For MCP-compatible agents (Claude, Cursor, Cline). Typed tool calls, structured returns.
+
+**Server command:** `domain-audit-mcp`
+
+**Configuration:**
+
+```json
+{
+  "mcpServers": {
+    "domain-audit": {
+      "command": "domain-audit-mcp"
+    }
+  }
+}
+```
+
+**Tools:**
+
+| Tool            | Parameters                                                            | Returns         |
+|----------------|-----------------------------------------------------------------------|-----------------|
+| audit_domain   | domain, scanners?: list[str], deep?: bool, tech_patterns?: object     | Full audit dict |
+| scan_dns       | domain                                                                | ScanResult      |
+| scan_ssl       | domain                                                                | ScanResult      |
+| scan_headers   | domain                                                                | ScanResult      |
+| scan_whois     | domain                                                                | ScanResult      |
+| scan_ports     | domain, subdomains?: list[str]                                        | ScanResult      |
+| scan_email     | domain                                                                | ScanResult      |
+| scan_subdomains| domain, deep?: bool                                                   | ScanResult      |
+| scan_tech      | domain, custom_patterns?: object                                      | ScanResult      |
+| list_scanners  | (none)                                                                | Scanner list    |
+
+On error, tools return `{"error": string, "module": string}`.
+
+## Integration: Python API
+
+For in-process Python agents. Returns dataclasses directly.
+
+```python
+from domain_audit import audit
+
+result = audit("example.com")                    # full audit
+result = audit("example.com", only=["ssl"])      # single scanner
+data = result.to_dict()                          # JSON-serializable dict
+```
+
+**`audit()` signature:**
+
+```python
+audit(domain, only=None, max_workers=8, show=False, deep_subdomains=False, tech_patterns=None) -> AuditResult
+```
+
+Set `show=False` to suppress terminal output. Returns `AuditResult` with `.to_dict()`, `.to_json(path)`, `.to_csv(path)`.
+
+## Integration: CLI
+
+For shell agents, orchestrators, non-Python runtimes. Pipe JSON to stdout.
+
+```bash
+# Full audit, JSON output
+domain-audit example.com --format json
+
+# Specific scanners
+domain-audit example.com --only ssl,dns --format json
+
+# Save to file
+domain-audit example.com --format json -o result.json
+
+# CSV
+domain-audit example.com --format csv -o result.csv
+
+# Deep subdomain probing
+domain-audit example.com --deep --format json
+
+# Custom tech patterns
+domain-audit example.com --tech-patterns patterns.json --format json
+```
+
+Exit code 0 on success. JSON written to stdout when `--format json` and no `-o` flag.
